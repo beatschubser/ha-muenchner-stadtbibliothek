@@ -83,6 +83,7 @@ def test_renewed_hint():
     assert loan.renewable is False
     assert loan.renewals == 1
     assert parser.renewed_today(loan)
+    assert loan.as_dict()["renewed_today"] is True
 
 
 def test_overview_without_loans():
