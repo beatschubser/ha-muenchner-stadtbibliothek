@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "muenchner_stadtbibliothek"
-VERSION = "0.3.1"
+VERSION = "0.3.2"
 
 # Library catalog (aDIS/BMS by aStec). Changeable in case the library moves the catalog.
 DEFAULT_BASE_URL = "https://ssl.muenchen.de"
@@ -38,4 +38,4 @@ CARD_FILE = "muenchner-stadtbibliothek-card.js"
 CARD_URL = f"{FRONTEND_URL}/{CARD_FILE}"
 
 USER_AGENT = f"Mozilla/5.0 (compatible; HomeAssistant-MuenchnerStadtbibliothek/{VERSION})"
-REQUEST_TIMEOUT = 30
+REQUEST_TIMEOUT = 10  # seconds per page load (including redirects)

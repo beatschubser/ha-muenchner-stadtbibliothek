@@ -11,7 +11,7 @@
  *   appearance  auto | light | dark (default: auto = theme)
  */
 
-const VERSION = "0.3.1";
+const VERSION = "0.3.2";
 const DOMAIN = "muenchner_stadtbibliothek";
 const CARD_TYPE = "muenchner-stadtbibliothek-card";
 const DEFAULT_LOAN_DAYS = 28;
