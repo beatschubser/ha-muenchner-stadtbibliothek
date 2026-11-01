@@ -57,6 +57,9 @@
           "renewable": {
             "name": "Renewable"
           },
+          "card_valid_until": {
+            "name": "Card valid until"
+          },
           "last_update": {
             "name": "Last update"
           }
