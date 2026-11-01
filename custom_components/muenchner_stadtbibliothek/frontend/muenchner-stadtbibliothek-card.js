@@ -3,23 +3,23 @@
  * Served by the integration (no build step, no external libraries).
  *
  * Card options (all optional, editable in the visual editor):
- *   entity      loans sensor of the integration (default: the first one found)
- *   title       heading (default: "Ausleihen" / "Loans")
+ *   account     name of one library card (as set up in the integration); default: all cards as pills
+ *   title       heading when only one card is shown (default: its name)
  *   show_card   show "card valid until" in the header (default: true)
  *   loan_days   loan period in days, full ring (default: 28)
  *   appearance  auto | light | dark (default: auto = theme)
  */
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const DOMAIN = "muenchner_stadtbibliothek";
 const CARD_TYPE = "muenchner-stadtbibliothek-card";
 const DEFAULT_LOAN_DAYS = 28;
 const SOON_DAYS = 3; // remaining days shown in the warning color
 const APPEARANCES = ["auto", "light", "dark"];
+const ALL = "__all__"; // editor value for "all accounts as pills"
 
 const TEXTS = {
   de: {
-    title: "Ausleihen",
     card_valid: "Ausweis bis {date}",
     due: "fällig {date}",
     overdue: "überfällig seit {date}",
@@ -33,9 +33,11 @@ const TEXTS = {
     renewed: "Heute verlängert",
     empty: "Keine Ausleihen",
     unavailable: "Keine Daten",
-    no_entity: "Kein Ausleihen-Sensor der Integration Münchner Stadtbibliothek gefunden.",
-    editor_entity: "Ausleihen-Sensor",
-    editor_title: "Titel",
+    no_entity: "Kein Ausweis der Integration Münchner Stadtbibliothek gefunden.",
+    account_not_found: "Ausweis „{name}“ nicht gefunden.",
+    editor_account: "Ausweis",
+    editor_all: "Alle (als Auswahl-Pillen)",
+    editor_title: "Titel (leer = Name des Ausweises)",
     editor_show_card: "Ausweis-Gültigkeit anzeigen",
     editor_loan_days: "Leihfrist (Tage, voller Ring)",
     editor_appearance: "Darstellung",
@@ -44,7 +46,6 @@ const TEXTS = {
     appearance_dark: "Dunkel",
   },
   en: {
-    title: "Loans",
     card_valid: "Card valid until {date}",
     due: "due {date}",
     overdue: "overdue since {date}",
@@ -58,9 +59,11 @@ const TEXTS = {
     renewed: "Renewed today",
     empty: "No loans",
     unavailable: "No data",
-    no_entity: "No loans sensor of the Münchner Stadtbibliothek integration found.",
-    editor_entity: "Loans sensor",
-    editor_title: "Title",
+    no_entity: "No library card of the Münchner Stadtbibliothek integration found.",
+    account_not_found: "Library card \"{name}\" not found.",
+    editor_account: "Library card",
+    editor_all: "All (as selection pills)",
+    editor_title: "Title (empty = name of the card)",
     editor_show_card: "Show card validity",
     editor_loan_days: "Loan period (days, full ring)",
     editor_appearance: "Appearance",
@@ -114,9 +117,34 @@ function integrationEntities(hass) {
   return Object.values(hass?.entities || {}).filter((e) => e.platform === DOMAIN);
 }
 
-function findLoansSensor(hass) {
-  return integrationEntities(hass).find((e) => e.entity_id.startsWith("sensor.") && e.translation_key === "loans")?.entity_id;
+/**
+ * One account per library card (= device of the integration): name, loans sensor,
+ * validity sensor and the renew buttons by barcode. Sorted by name.
+ */
+function findAccounts(hass) {
+  const byDevice = {};
+  for (const e of integrationEntities(hass)) {
+    const key = e.device_id || e.entity_id;
+    const account = (byDevice[key] ||= { id: key, loans: null, validity: null, buttons: {} });
+    if (e.entity_id.startsWith("sensor.") && e.translation_key === "loans") account.loans = e.entity_id;
+    else if (e.entity_id.startsWith("sensor.") && e.translation_key === "card_valid_until") account.validity = e.entity_id;
+    else if (e.entity_id.startsWith("button.")) {
+      const barcode = hass.states[e.entity_id]?.attributes?.barcode;
+      if (barcode) account.buttons[barcode] = e.entity_id;
+    }
+  }
+  return Object.values(byDevice)
+    .filter((a) => a.loans)
+    .map((a) => {
+      const device = hass.devices?.[a.id];
+      return { ...a, name: device?.name_by_user || device?.name || hass.states[a.loans]?.attributes?.friendly_name || a.loans };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
+
+/** account option: name (case-insensitive) or entity id of the loans sensor */
+const matchAccount = (account, wanted) =>
+  account.loans === wanted || account.name.toLowerCase() === String(wanted).trim().toLowerCase();
 
 const RENEW_ICON =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"></path><path d="M21 4v5h-5"></path></svg>';
@@ -137,6 +165,7 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     this._card.addEventListener("click", (e) => this._onClick(e));
     this._config = {};
     this._pending = new Set(); // barcodes being renewed right now
+    this._active = null; // id of the account shown when there are pills
     this._size = 3;
   }
 
@@ -144,9 +173,8 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     return document.createElement(`${CARD_TYPE}-editor`);
   }
 
-  static getStubConfig(hass) {
-    const entity = findLoansSensor(hass);
-    return entity ? { entity } : {};
+  static getStubConfig() {
+    return {};
   }
 
   setConfig(config) {
@@ -173,45 +201,26 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     return { columns: 12, min_columns: 6, rows: "auto" };
   }
 
-  get _entityId() {
-    return this._config.entity || findLoansSensor(this._hass);
-  }
-
-  /** Entities on the device of the loans sensor: buttons by barcode, card validity sensor. */
-  _related() {
-    const hass = this._hass;
-    const deviceId = hass.entities?.[this._entityId]?.device_id;
-    const buttons = {};
-    let validity = null;
-    for (const e of integrationEntities(hass)) {
-      if (deviceId && e.device_id !== deviceId) continue;
-      if (e.entity_id.startsWith("button.")) {
-        const barcode = hass.states[e.entity_id]?.attributes?.barcode;
-        if (barcode) buttons[barcode] = e.entity_id;
-      } else if (e.translation_key === "card_valid_until") {
-        validity = hass.states[e.entity_id];
-      }
-    }
-    return { buttons, validity };
-  }
-
   _signatureOf(hass) {
-    const id = this._config.entity || findLoansSensor(hass);
-    const state = id ? hass.states[id] : null;
-    const related = id && hass.entities ? this._relatedFor(hass, id) : "";
-    return [id, state?.state, JSON.stringify(state?.attributes?.loans || null), related, language(hass), new Date().toDateString()].join("|");
-  }
-
-  _relatedFor(hass, id) {
-    const deviceId = hass.entities?.[id]?.device_id;
-    return integrationEntities(hass)
-      .filter((e) => !deviceId || e.device_id === deviceId)
-      .map((e) => `${e.entity_id}=${hass.states[e.entity_id]?.state}`)
+    const parts = integrationEntities(hass).map((e) => {
+      const state = hass.states[e.entity_id];
+      return `${e.entity_id}=${state?.state}:${state?.attributes?.barcode || ""}:${JSON.stringify(state?.attributes?.loans || "")}`;
+    });
+    const names = Object.values(hass.devices || {})
+      .map((d) => `${d.id}:${d.name_by_user || d.name}`)
       .join(",");
+    return [parts.join(","), names, language(hass), new Date().toDateString()].join("|");
   }
 
-  _loans() {
-    const state = this._hass.states[this._entityId];
+  /** Accounts this card shows: one fixed account (option account, or entity of 0.2.0) or all. */
+  _accounts() {
+    const all = findAccounts(this._hass);
+    const wanted = this._config.account || this._config.entity;
+    return wanted ? all.filter((a) => matchAccount(a, wanted)) : all;
+  }
+
+  _loans(account) {
+    const state = this._hass.states[account.loans];
     const loans = Array.isArray(state?.attributes?.loans) ? state.attributes.loans : null;
     if (!loans) return null;
     const period = Number(this._config.loan_days) > 0 ? Number(this._config.loan_days) : DEFAULT_LOAN_DAYS;
@@ -231,33 +240,44 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     const appearance = APPEARANCES.includes(this._config.appearance) ? this._config.appearance : "auto";
     this._card.className = appearance === "auto" ? "" : `mode-${appearance}`;
 
-    const entityId = this._entityId;
-    if (!entityId || !hass.states[entityId]) {
+    const accounts = this._accounts();
+    if (!accounts.length) {
       this._size = 2;
-      this._card.innerHTML = `<div class="message">${esc(t(hass, "no_entity"))}</div>`;
+      const wanted = this._config.account || this._config.entity;
+      this._card.innerHTML = `<div class="message">${esc(wanted ? t(hass, "account_not_found", { name: wanted }) : t(hass, "no_entity"))}</div>`;
       return;
     }
+    const account = accounts.find((a) => a.id === this._active) || accounts[0];
+    this._active = account.id;
 
-    const { buttons, validity } = this._related();
-    const title = this._config.title ?? t(hass, "title");
+    const validity = account.validity ? hass.states[account.validity] : null;
     const validDate = validity && parseDate(validity.state);
-    const showCard = this._config.show_card !== false && validDate;
-    const head =
-      title || showCard
-        ? `<div class="head">
-             <div class="title">${esc(title)}</div>
-             ${showCard ? `<div class="valid">${esc(t(hass, "card_valid", { date: formatDate(hass, validDate, true) }))}</div>` : ""}
-           </div>`
+    const valid =
+      this._config.show_card !== false && validDate
+        ? `<div class="valid">${esc(t(hass, "card_valid", { date: formatDate(hass, validDate, true) }))}</div>`
         : "";
+    let head;
+    if (accounts.length > 1) {
+      const pills = accounts
+        .map(
+          (a) =>
+            `<button type="button" class="tab ${a.id === account.id ? "active" : ""}" data-tab="${esc(a.id)}" aria-pressed="${a.id === account.id}">${esc(a.name)}</button>`
+        )
+        .join("");
+      head = `<div class="head"><div class="tabs">${pills}</div>${valid}</div>`;
+    } else {
+      const title = this._config.title ?? account.name;
+      head = title || valid ? `<div class="head"><div class="title">${esc(title)}</div>${valid}</div>` : "";
+    }
 
-    const loans = this._loans();
+    const loans = this._loans(account);
     let body;
     if (loans === null) {
       body = `<div class="message">${esc(t(hass, "unavailable"))}</div>`;
     } else if (loans.length === 0) {
       body = `<div class="message">${esc(t(hass, "empty"))}</div>`;
     } else {
-      body = `<div class="list">${loans.map((loan) => this._row(loan, buttons[loan.barcode])).join("")}</div>`;
+      body = `<div class="list">${loans.map((loan) => this._row(loan, account.buttons[loan.barcode])).join("")}</div>`;
     }
     this._size = 1 + Math.max(1, Math.ceil((loans?.length || 1) * 1.6));
     this._card.innerHTML = head + body;
@@ -301,6 +321,12 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
   }
 
   async _onClick(event) {
+    const tab = event.target.closest("button[data-tab]");
+    if (tab) {
+      this._active = tab.dataset.tab;
+      this._render();
+      return;
+    }
     const button = event.target.closest("button[data-button]");
     if (!button || button.disabled) return;
     const barcode = button.dataset.barcode;
@@ -324,6 +350,11 @@ ha-card.mode-dark { color-scheme:dark; --primary-text-color:#e1e1e1; --secondary
 ha-card { display:block; padding:16px; color:var(--primary-text-color); container-type:inline-size; }
 .head { display:flex; align-items:baseline; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
 .title { font-size:1.25em; font-weight:500; flex:1; min-width:0; }
+.tabs { display:flex; gap:6px; flex:1; flex-wrap:wrap; min-width:0; }
+.tab { font:inherit; font-size:.95em; min-height:36px; border:1px solid var(--divider-color, rgba(127,127,127,.3)); background:none; color:var(--primary-text-color); border-radius:18px; padding:6px 14px; cursor:pointer; }
+.tab.active { background:var(--primary-color); border-color:var(--primary-color); color:var(--text-primary-color, #fff); }
+.tab:focus-visible { outline:2px solid var(--primary-color); outline-offset:2px; }
+.head { align-items:center; }
 .valid { font-size:.85em; color:var(--secondary-text-color); }
 .list { display:flex; flex-direction:column; gap:8px; }
 .row { display:flex; align-items:center; gap:14px; padding:12px; border-radius:12px; border:1px solid transparent;
@@ -372,16 +403,29 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
   }
 
   set hass(hass) {
+    const first = !this._hass;
     this._hass = hass;
-    if (this._form) this._form.hass = hass;
-    else this._render();
+    if (first || !this._form) this._render();
+    else this._form.hass = hass;
   }
 
   _schema() {
     const hass = this._hass;
-    return [
-      { name: "entity", selector: { entity: { filter: { integration: DOMAIN, domain: "sensor" } } } },
-      { name: "title", selector: { text: {} } },
+    const accounts = findAccounts(hass);
+    const fields = [
+      {
+        name: "account",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [{ value: ALL, label: t(hass, "editor_all") }, ...accounts.map((a) => ({ value: a.name, label: a.name }))],
+          },
+        },
+      },
+    ];
+    // The title is only shown for a single account; with several accounts the pills are the heading
+    if (this._config.account || this._config.entity || accounts.length <= 1) fields.push({ name: "title", selector: { text: {} } });
+    fields.push(
       {
         type: "grid",
         name: "",
@@ -393,8 +437,15 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
           },
         ],
       },
-      { name: "show_card", selector: { boolean: {} } },
-    ];
+      { name: "show_card", selector: { boolean: {} } }
+    );
+    return fields;
+  }
+
+  _accountValue() {
+    const wanted = this._config.account || this._config.entity;
+    if (!wanted) return ALL;
+    return findAccounts(this._hass).find((a) => matchAccount(a, wanted))?.name || wanted;
   }
 
   _render() {
@@ -408,25 +459,30 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
     this._form.hass = this._hass;
     this._form.schema = this._schema();
     this._form.data = {
-      entity: this._config.entity || findLoansSensor(this._hass) || "",
-      title: this._config.title ?? t(this._hass, "title"),
+      account: this._accountValue(),
+      title: this._config.title ?? "",
       loan_days: this._config.loan_days ?? DEFAULT_LOAN_DAYS,
       appearance: this._config.appearance || "auto",
       show_card: this._config.show_card !== false,
     };
   }
 
-  /** Only options that differ from the defaults are stored; unknown options are kept. */
+  /** Only options that differ from the defaults are stored; unknown options (grid_options, ...) are kept. */
   _changed(value) {
     const config = { ...this._config, type: this._config.type || `custom:${CARD_TYPE}` };
-    const set = (key, keep) => (keep ? (config[key] = value[key]) : delete config[key]);
-    set("entity", value.entity && value.entity !== findLoansSensor(this._hass));
-    set("title", value.title !== undefined && value.title !== t(this._hass, "title"));
-    set("loan_days", value.loan_days && Number(value.loan_days) !== DEFAULT_LOAN_DAYS);
-    set("appearance", value.appearance && value.appearance !== "auto");
+    delete config.entity; // replaced by account (name)
+    if (value.account && value.account !== ALL) config.account = value.account;
+    else delete config.account;
+    if (value.title) config.title = value.title;
+    else delete config.title;
+    if (value.loan_days && Number(value.loan_days) !== DEFAULT_LOAN_DAYS) config.loan_days = Number(value.loan_days);
+    else delete config.loan_days;
+    if (value.appearance && value.appearance !== "auto") config.appearance = value.appearance;
+    else delete config.appearance;
     if (value.show_card === false) config.show_card = false;
     else delete config.show_card;
     this._config = config;
+    this._form.schema = this._schema(); // title field appears or disappears with the account choice
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
   }
 }
