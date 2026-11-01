@@ -39,9 +39,10 @@ jobs:
           base=custom_components/muenchner_stadtbibliothek
           manifest=$(jq -r .version "$base/manifest.json")
           python=$(sed -nE 's/^VERSION = "([^"]+)".*/\1/p' "$base/const.py")
-          echo "manifest=$manifest const.py=$python"
-          if [ "$manifest" != "$python" ]; then
-            echo "::error::Version mismatch (manifest=$manifest, const.py=$python). Use scripts/bump_version.py."
+          card=$(sed -nE 's/^const VERSION = "([^"]+)".*/\1/p' "$base/frontend/muenchner-stadtbibliothek-card.js")
+          echo "manifest=$manifest const.py=$python card=$card"
+          if [ "$manifest" != "$python" ] || [ "$manifest" != "$card" ]; then
+            echo "::error::Version mismatch (manifest=$manifest, const.py=$python, card=$card). Use scripts/bump_version.py."
             exit 1
           fi
           echo "version=$manifest" >> "$GITHUB_OUTPUT"

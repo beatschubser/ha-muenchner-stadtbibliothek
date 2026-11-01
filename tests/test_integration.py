@@ -102,6 +102,7 @@ async def test_renew(hass: HomeAssistant, fake) -> None:
     state = hass.states.get(buttons["00000100000002"])
     assert state.attributes["due_date"] == "2030-03-30"
     assert state.attributes["renewable"] is False
+    assert state.attributes["renewed_today"] is True
     assert fake.renew_posts == 1
 
     with pytest.raises(HomeAssistantError):
@@ -116,6 +117,16 @@ async def test_returned_loan_removes_button(hass: HomeAssistant, fake) -> None:
     await hass.async_block_till_done()
     buttons = _button_ids(hass, entry)
     assert set(buttons) == {"00000100000002", "00000100000003"}
+
+
+async def test_card_is_served(hass: HomeAssistant, hass_client, fake) -> None:
+    await _setup(hass)
+    client = await hass_client()
+    response = await client.get("/muenchner_stadtbibliothek_files/muenchner-stadtbibliothek-card.js")
+    assert response.status == 200
+    assert "muenchner-stadtbibliothek-card" in await response.text()
+    response = await client.get("/muenchner_stadtbibliothek_files/../manifest.json")
+    assert response.status == 404
 
 
 async def test_wrong_password_starts_reauth(hass: HomeAssistant, fake) -> None:

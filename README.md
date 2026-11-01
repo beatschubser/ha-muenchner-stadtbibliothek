@@ -38,6 +38,27 @@
 
 The update interval can be changed later under **Configure**.
 
+## Dashboard card
+
+The integration brings its own card and registers it as dashboard resource automatically (reload the browser once after installing or updating).
+
+**Edit dashboard → Add card → Münchner Stadtbibliothek.** All options can be set in the visual editor, the card size in the layout tab:
+
+| Option | Default | |
+| --- | --- | --- |
+| `entity` | first loans sensor found | loans sensor of the card to show (one card per library card) |
+| `title` | "Ausleihen" / "Loans" | empty = no heading |
+| `show_card` | `true` | "card valid until" in the header |
+| `loan_days` | `28` | loan period in days, shown as a full ring |
+| `appearance` | `auto` | `auto` (theme), `light`, `dark` |
+
+```yaml
+type: custom:muenchner-stadtbibliothek-card
+entity: sensor.munchner_stadtbibliothek_ausleihen
+```
+
+Each loan shows the remaining days as a ring (orange from 3 days, red when overdue), title, author, library and due date. Renewable items get a "Renew" button, items renewed today a green "Renewed today"; items that cannot be renewed have no button. In narrow columns the buttons become icons.
+
 ## Entities
 
 | Entity (English / German name) | State | Attributes |
@@ -45,7 +66,7 @@ The update interval can be changed later under **Configure**.
 | Card valid until / Ausweis gültig bis | date | |
 | Loans / Ausleihen | number of loans | `loans` (list), `renewable`, `last_update` |
 | Next due date / Nächste Fälligkeit | date | `count`, `titles`, `renewable` |
-| Renew *title* / *Titel* verlängern (button) | | `barcode`, `title`, `author`, `full_title`, `signature`, `library`, `due_date`, `hint`, `renewable`, `renewals` |
+| Renew *title* / *Titel* verlängern (button) | | `barcode`, `title`, `author`, `full_title`, `signature`, `library`, `due_date`, `hint`, `renewable`, `renewed_today`, `renewals` |
 
 Each item in the `loans` attribute has the same fields as the button attributes.
 

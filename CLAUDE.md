@@ -16,10 +16,12 @@ custom_components/muenchner_stadtbibliothek/
   button.py         one renew button per loan, added/removed with the loans (entity registry)
   config_flow.py    one entry per card (unique_id = card number), reauth, options: interval in hours
   diagnostics.py    redacted
+  frontend_resource.py  serves frontend/ under /muenchner_stadtbibliothek_files (no-cache) and adds the dashboard resource (?v=VERSION)
+  frontend/muenchner-stadtbibliothek-card.js  card + editor (vanilla JS, ha-form editor, de/en texts inline)
 tests/fake_adis.py      fake catalog (same HTML structure as the real one, invented data) + FakeSession
 tests/test_client.py    python3 tests/test_client.py (needs only beautifulsoup4; stubs aiohttp if missing)
 tests/test_integration.py real HA via pytest-homeassistant-custom-component (GitHub Actions only, no PyPI here)
-scripts/bump_version.py   sets the version in manifest.json and const.py
+scripts/bump_version.py   sets the version in manifest.json, const.py and the card
 scripts/release_notes.py  release notes from commit subjects
 ```
 
@@ -40,6 +42,14 @@ scripts/release_notes.py  release notes from commit subjects
 - No permanent session: every update and every renewal is one short session, to keep traffic low. Default interval 4 h.
 - Buttons of loans that are not renewable stay available and raise an error with the hint, without a request to the catalog.
 - Attribute names are English; page texts in const.py are German because the catalog is German only.
+
+## Card (design approved by the maintainer, "C2" one-column tiles)
+
+- One row per loan: ring with remaining days (full ring = `loan_days`, default 28; orange <= 3 days, red + red border when overdue), title (2 lines), author · library, due date.
+- Right side: "Verlängern" pill (primary color 18 %) only when `renewable`; green "Heute verlängert" pill when `renewed_today`; nothing otherwise. No error display in the card (HA shows the error). Narrow columns (< 400 px): icon-only pills.
+- The card finds the buttons by `barcode` attribute among the integration's entities on the same device as the loans sensor, and the validity sensor by `translation_key`.
+- Options only differ from defaults are stored; the editor keeps all other keys (grid_options etc.).
+- For UI changes: render tests with Playwright (mock hass with `entities`/`states`/`callService`, ha-card stub) in light, dark and narrow.
 
 ## Release workflow
 
