@@ -1,0 +1,19 @@
+{
+  "domain": "muenchner_stadtbibliothek",
+  "name": "Münchner Stadtbibliothek",
+  "codeowners": [
+    "@beatschubser"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/beatschubser/ha-muenchner-stadtbibliothek",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/beatschubser/ha-muenchner-stadtbibliothek/issues",
+  "loggers": [
+    "custom_components.muenchner_stadtbibliothek"
+  ],
+  "requirements": [
+    "beautifulsoup4>=4.12.0"
+  ],
+  "version": "0.1.0"
+}

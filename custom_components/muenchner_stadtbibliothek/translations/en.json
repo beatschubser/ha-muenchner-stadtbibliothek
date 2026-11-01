@@ -1,0 +1,77 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Library card",
+        "description": "Card number and password of the Münchner Stadtbibliothek account (the same as for the online catalog).",
+        "data": {
+          "name": "Name",
+          "card_number": "Card number",
+          "password": "Password"
+        },
+        "data_description": {
+          "name": "Shown as device name, e.g. the card holder. Useful with several cards."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Log in again",
+        "description": "The catalog rejected the password for {name}. Enter the current password.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Card number or password is wrong.",
+      "cannot_connect": "The catalog is not reachable. Try again later.",
+      "unknown_page": "The catalog answered with an unexpected page. Details are in the log."
+    },
+    "abort": {
+      "already_configured": "This card is already set up.",
+      "reauth_successful": "Password updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Update interval",
+        "description": "Every update logs in to the catalog once and out again. Due dates rarely change, a few hours are enough.",
+        "data": {
+          "scan_interval_hours": "Update every"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "card_valid_until": { "name": "Card valid until" },
+      "loans": {
+        "name": "Loans",
+        "unit_of_measurement": "items",
+        "state_attributes": {
+          "loans": { "name": "Loans" },
+          "renewable": { "name": "Renewable" },
+          "last_update": { "name": "Last update" }
+        }
+      },
+      "next_due_date": {
+        "name": "Next due date",
+        "state_attributes": {
+          "count": { "name": "Items" },
+          "titles": { "name": "Titles" },
+          "renewable": { "name": "All renewable" }
+        }
+      }
+    },
+    "button": {
+      "renew": { "name": "Renew {title}" }
+    }
+  },
+  "exceptions": {
+    "renew_failed": { "message": "Renewal not possible: {reason}" },
+    "not_renewable": { "message": "\"{title}\" cannot be renewed: {hint}" },
+    "loan_gone": { "message": "This item is no longer on the card." },
+    "auth_failed": { "message": "The catalog rejected the login. Please enter the password again." },
+    "connection_failed": { "message": "The catalog is not reachable: {reason}" }
+  }
+}
