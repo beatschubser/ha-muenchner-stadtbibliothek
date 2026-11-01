@@ -266,15 +266,21 @@ class LibraryClient:
         try:
             if BUTTON_ADVANCED_SEARCH not in page.buttons and BUTTON_TO_OVERVIEW in page.buttons:
                 page, _ = await self._click_button(page, BUTTON_TO_OVERVIEW)
+            fields = (SEARCH_FIELD_TITLE, SEARCH_FIELD_SIGNATURE)
             for loan in loans[:MAX_LOOKUPS_PER_UPDATE]:
-                if BUTTON_ADVANCED_SEARCH not in page.buttons:
-                    break
-                page, _ = await self._click_button(page, BUTTON_ADVANCED_SEARCH)
-                form = parse_search_form(page, (SEARCH_FIELD_TITLE, SEARCH_FIELD_SIGNATURE), SEARCH_OPERATOR_AND, BUTTON_SEARCH)
+                # a search without a hit stays on the search form (which has no "Erweiterte Suche" button): reuse it
+                form = parse_search_form(page, fields, SEARCH_OPERATOR_AND, BUTTON_SEARCH)
+                if form is None:
+                    if BUTTON_ADVANCED_SEARCH not in page.buttons:
+                        break
+                    page, _ = await self._click_button(page, BUTTON_ADVANCED_SEARCH)
+                    form = parse_search_form(page, fields, SEARCH_OPERATOR_AND, BUTTON_SEARCH)
                 if form is None or not page.action:
                     _LOGGER.debug("Advanced search form not recognized")
                     break
                 values = dict(form.fields)
+                for name, _value in form.texts:
+                    values[name] = ""  # the catalog keeps the terms of the previous search in the form
                 values.update(page.hidden)
                 values.update(scriptEnabled="true", scrollPos="0", keyCode="0", source="$B", selected="", focus=form.submit[2] or "")
                 values[form.library] = loan.library

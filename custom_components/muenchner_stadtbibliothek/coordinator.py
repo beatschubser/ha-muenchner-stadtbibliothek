@@ -30,6 +30,7 @@ from .const import (
 )
 
 STORAGE_VERSION = 1
+LOOKUP_VERSION = 2  # results of older versions without a cover are searched once more
 IMAGE_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}
 
 _LOGGER = logging.getLogger(__name__)
@@ -63,9 +64,13 @@ class LibraryCoordinator(DataUpdateCoordinator[AccountData]):
     async def async_load_isbns(self) -> None:
         """Load the stored lookup results (before the first update)."""
         stored = await self._isbn_store.async_load() or {}
-        # 0.5.0 stored only the ISBN (no cover file): search those items once more to get the cover
-        self._isbns = {code: value for code, value in stored.items() if isinstance(value, dict) or value is None}
-        self._isbns = {code: value or {"isbn": None, "file": None} for code, value in self._isbns.items()}
+        # results without a cover from older versions (0.5.0 kept only the ISBN, 0.5.0/0.5.1 stopped
+        # after a search without hit) are dropped, so these items are searched once more
+        self._isbns = {
+            code: value
+            for code, value in stored.items()
+            if isinstance(value, dict) and (value.get("file") or value.get("v") == LOOKUP_VERSION)
+        }
 
     async def _async_update_data(self) -> AccountData:
         try:
@@ -77,7 +82,7 @@ class LibraryCoordinator(DataUpdateCoordinator[AccountData]):
         if account.looked_up:
             for code, result in account.looked_up.items():
                 file = await self._save_cover(result.isbn, result.cover, result.content_type)
-                self._isbns[code] = {"isbn": result.isbn, "file": file}
+                self._isbns[code] = {"isbn": result.isbn, "file": file, "v": LOOKUP_VERSION}
             self._isbn_store.async_delay_save(lambda: self._isbns, 5)
         self._apply_isbns(account)
         return account

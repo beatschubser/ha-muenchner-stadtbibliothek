@@ -58,6 +58,7 @@ class FakeAdis:
     renew_posts: int = 0
     searches: list[tuple[str, str, str]] = field(default_factory=list)
     cover_requests: list[tuple[str, str]] = field(default_factory=list)  # (path, referer)
+    last_terms: tuple[str, str] = ("", "")
     hits: list[str] = field(default_factory=list)
 
     # ---- rendering ----------------------------------------------------------
@@ -115,7 +116,7 @@ class FakeAdis:
 </tr></thead><tbody>{''.join(rows)}</tbody></table>"""
             return self._page("Meine Ausleihen - Katalog", body, ["Druckversion", "Alle verlängern", "Markierte Medien verlängern", "Zur Übersicht"])
         if self.view == "advanced":
-            return self._page("Erweiterte Suche - Katalog", self._advanced_form(), ["Suchen", "Wiederholen", "Leeren", "Suchen"])
+            return self._page("Erweiterte Suche - Katalog", self._advanced_form(self.last_terms), ["Suchen", "Wiederholen", "Leeren", "Suchen"])
         if self.view == "record":
             ean = self.hits[0]
             body = f"""<table><tr><th scope="row">Titel</th><td>Testtitel</td></tr>
@@ -129,18 +130,19 @@ class FakeAdis:
         return self._page("Katalog", "<p>Suche</p>", ["Suchen"])
 
     @staticmethod
-    def _advanced_form() -> str:
+    def _advanced_form(terms: tuple[str, str] = ("", "")) -> str:
         def select(name, options, chosen=""):
             opts = "".join(f'<option value="{html.escape(o)}"{" selected" if o == chosen else ""}>{html.escape(o)}</option>' for o in options)
             return f'<select name="{name}">{opts}</select>'
 
         rows = []
         for n, chosen in enumerate(["Titel", "Person", "ISBN, ISSN, ISMN"]):
-            rows.append(select(f"$Select${2 * n}", FIELDS, chosen) + f'<input type="search" name="$Autosuggest${n}" value="">')
+            value = html.escape(terms[n]) if n < 2 else ""
+            rows.append(select(f"$Select${2 * n}", FIELDS, chosen) + f'<input type="search" name="$Autosuggest${n}" value="{value}">')
             if n < 2:
                 rows.append(select(f"$Select${2 * n + 1}", ["", "NICHT", "ODER", "UND"], "UND"))
         return (
-            '<input type="search" name="$Autosuggest" value="">'
+            f'<input type="search" name="$Autosuggest" value="{html.escape(terms[0])}">'
             + select("$Select", LIBRARIES, "Bitte auswählen")
             + "".join(rows)
             + select("$Select$5", ["- Alle -", "Buch", "CD", "DVD-Video", "Spiel", "E-Book", "Noten", "Karte", "LP", "Video", "Zeitung", "Zeitschriften"], "- Alle -")
@@ -212,12 +214,15 @@ class FakeAdis:
         elif self.view == "advanced" and "pressed" in form.get("$Button$3", []):
             first = lambda key: form.get(key, [""])[0]  # noqa: E731
             assert first("$Select$0") == "Titel" and first("$Select$1") == "UND", form
+            assert first("$Autosuggest") == "", "old search terms must not be sent again"
             title = first("$Autosuggest$0")
             signature = first("$Autosuggest$1") if first("$Select$2") == "Signatur" else ""
             library = first("$Select")
             self.searches.append((title, signature, library))
             self.hits = RECORDS.get((title, signature, library), [])
-            self.view = "record" if len(self.hits) == 1 else "results"
+            self.last_terms = (title, signature)
+            # like the real catalog: one hit -> record, several -> list, none -> the form again (terms kept)
+            self.view = "record" if len(self.hits) == 1 else "results" if self.hits else "advanced"
         elif "Markierte Medien verlängern" in form.get("$Button$2", []):
             assert "pressed" in form["$Button$2"], "button marker missing"
             self.renew_posts += 1

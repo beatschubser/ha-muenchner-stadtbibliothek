@@ -284,6 +284,7 @@ class SearchForm:
     """Field names of the advanced search form ("Erweiterte Suche")."""
 
     fields: list[tuple[str, str]]  # every field of the form with its current value, in order
+    texts: list[tuple[str, str]]  # the text and search inputs among them
     library: str  # select with the libraries
     rows: list[tuple[str, str]]  # (field select, text input) per search row, in order
     operators: list[str]  # selects between the rows (UND/ODER/NICHT)
@@ -298,6 +299,7 @@ def parse_search_form(page: AdisPage, field_options: tuple[str, ...], operator: 
     if form is None:
         return None
     fields: list[tuple[str, str]] = []
+    texts: list[tuple[str, str]] = []
     library = None
     rows: list[tuple[str, str]] = []
     operators: list[str] = []
@@ -321,13 +323,15 @@ def parse_search_form(page: AdisPage, field_options: tuple[str, ...], operator: 
         if kind in ("submit", "button", "checkbox", "radio", "image", "reset"):
             continue
         fields.append((name, element.get("value", "")))
+        if kind in ("text", "search"):
+            texts.append((name, element.get("value", "")))
         if kind in ("text", "search") and pending_select:
             rows.append((pending_select, name))
             pending_select = None
     submit = next((s for s in reversed(page.submits) if s[1] == submit_label), None)
     if library is None or len(rows) < 2 or not operators or submit is None:
         return None
-    return SearchForm(fields, library, rows, operators, submit)
+    return SearchForm(fields, texts, library, rows, operators, submit)
 
 
 def _isbn10_to_13(isbn10: str) -> str:

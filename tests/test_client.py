@@ -149,6 +149,14 @@ def test_cover_lookup_once_per_item():
     assert fake3.searches == []
 
 
+def test_cover_lookup_continues_after_a_search_without_hit():
+    fake = FakeAdis()
+    fake.loans = [fake.loans[2], fake.loans[0], fake.loans[1]]  # "Reise zum Mond" (no hit) first
+    data = run(fake, lambda c: c.async_fetch(set()))
+    assert [title for title, _, _ in fake.searches] == ["Reise zum Mond", "Der kleine Testdrache", "Kochen ohne Herd"]
+    assert data.looked_up["00000100000001"].isbn == "9783000000002"
+
+
 def test_search_form_of_the_real_catalog():
     html = (Path(__file__).resolve().parent / "fixtures" / "advanced_search.html").read_text(encoding="utf-8")
     page = parser.parse_page(html, "https://ssl.muenchen.de/aDISWeb/_session/app/opac/3")
