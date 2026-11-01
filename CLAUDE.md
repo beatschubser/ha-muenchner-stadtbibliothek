@@ -35,7 +35,7 @@ scripts/release_notes.py  release notes from commit subjects
 - Overview: `<dl><dt>Ausweis gültig bis</dt><dd>31.12.2030</dd>...`; loans link text e.g. "3 Ausleihen" (no link when there are none).
 - Loans: table `#resptable-1`, columns Markieren | Fällig am | Bibliothek | Titel | Hinweis. Title cell: `title / author ; ...<br>shelf mark<br>barcode`. Checkbox values `CheckCell`, `CheckCell_0`, ... are row positions, not stable.
 - Hint examples: "verlängerbar - Stand 02.03.2030" (renewable), after renewal "Heute verlängert<br>1 Verlängerung". Renewed items move to the end of the table. Renewal = check box + "Markierte Medien verlängern"; the result page shows the full table again plus the message "Sie haben versucht, die Leihfrist ...".
-- Session timeout 30 minutes. The client logs out after every call.
+- Session timeout 30 minutes. The client logs out after every call. Each page load (with redirects) times out after 10 s; no retries, no artificial pauses, no extra page loads after a renewal (wish of the maintainer: behave like a user).
 
 ## Design decisions (do not undo without asking)
 
