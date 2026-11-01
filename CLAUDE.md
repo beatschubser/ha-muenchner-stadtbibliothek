@@ -52,6 +52,7 @@ scripts/release_notes.py  release notes from commit subjects
 - Accounts = devices of the integration with a loans sensor (found via `hass.entities`, `translation_key`); name = device `name_by_user || name` (device name = entry title from the setup field "Name"). Several accounts: pills like in Sleek School Schedule (active one kept per card instance); option `account` (name, case-insensitive, or the loans entity id; the 0.2.0 option `entity` still works) fixes one account and shows `title ?? name`.
 - The card finds the buttons by `barcode` attribute among the account's entities, the validity sensor by `translation_key`.
 - `max_width` (default 640 px, 0 = full width) limits and centers ha-card, e.g. in Bubble Card pop-ups.
+- Card validity warning: `card_warn_days` (default 30) orange "· noch N Tage"; <= 7 days or expired red plus a banner above the loans; shown even with `show_card: false`; pills get a dot. The loans sensor also carries `card_valid_until` for automations.
 - Options only differ from defaults are stored; the editor keeps all other keys (grid_options etc.).
 - For UI changes: render tests with Playwright (mock hass with `entities`/`states`/`callService`, ha-card stub) in light, dark and narrow.
 

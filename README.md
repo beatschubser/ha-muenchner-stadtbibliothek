@@ -52,6 +52,7 @@ Die Integration bringt ihre eigene Karte mit und trägt sie automatisch als Dash
 | `show_card` | `true` | „Ausweis gültig bis“ in der Kopfzeile |
 | `show_library` | `true` | Bibliothek neben dem Autor |
 | `max_width` | `640` | maximale Breite in px, zentriert (z. B. in Pop-ups); `0` = volle Breite |
+| `card_warn_days` | `30` | ab so vielen Tagen vor Ablauf wird die Ausweis-Gültigkeit orange, ab 7 Tagen rot mit Hinweisbalken |
 | `loan_days` | `28` | Leihfrist in Tagen, entspricht dem vollen Ring |
 | `appearance` | `auto` | `auto` (Theme), `light`, `dark` |
 
@@ -62,14 +63,14 @@ account: Anna   # optional, der Name aus der Einrichtung
 
 Sind mehrere Ausweise eingerichtet, zeigt die Karte oben eine Pille pro Name; ein Tipp wechselt die Ansicht. Für nur eine Person den Namen im Editor auswählen.
 
-Jede Ausleihe zeigt die Resttage als Ring (orange ab 3 Tagen, rot wenn überfällig), Titel, Autor, Bibliothek und Fälligkeit. Verlängerbare Medien haben einen Button „Verlängern“, heute verlängerte ein grünes „Heute verlängert“; nicht verlängerbare Medien haben keinen Button. Während einer Verlängerung und 5 Sekunden nach einem Fehler ist der Button gesperrt. In schmalen Spalten zeigen die Buttons nur Icons.
+Jede Ausleihe zeigt die Resttage als Ring (orange ab 3 Tagen, rot wenn überfällig), Titel, Autor, Bibliothek und Fälligkeit. Verlängerbare Medien haben einen Button „Verlängern“, heute verlängerte ein grünes „Heute verlängert“; nicht verlängerbare Medien haben keinen Button. Während einer Verlängerung und 5 Sekunden nach einem Fehler ist der Button gesperrt. In schmalen Spalten zeigen die Buttons nur Icons. Läuft ein Ausweis bald ab, wird die Gültigkeit orange (30 Tage vorher) bzw. rot mit Hinweisbalken (7 Tage vorher); auch bei ausgeschalteter Gültigkeitsanzeige. Die Pille des betroffenen Ausweises bekommt einen farbigen Punkt.
 
 ## Entitäten
 
 | Entität (deutscher / englischer Name) | Zustand | Attribute |
 | --- | --- | --- |
 | Ausweis gültig bis / Card valid until | Datum | |
-| Ausleihen / Loans | Anzahl der Ausleihen | `loans` (Liste), `renewable`, `last_update` |
+| Ausleihen / Loans | Anzahl der Ausleihen | `loans` (Liste), `renewable`, `card_valid_until`, `last_update` |
 | Nächste Fälligkeit / Next due date | Datum | `count`, `titles`, `renewable` |
 | *Titel* verlängern / Renew *title* (Button) | | `barcode`, `title`, `author`, `full_title`, `signature`, `library`, `due_date`, `hint`, `renewable`, `renewed_today`, `renewals` |
 
@@ -77,7 +78,7 @@ Jeder Eintrag im Attribut `loans` hat dieselben Felder wie die Button-Attribute.
 
 ## Beispiele
 
-Benachrichtigung aufs Smartphone, wenn Ausleihen in 7 bzw. 2 Tagen fällig sind, pro Ausweis und ohne Buchtitel:
+Benachrichtigung aufs Smartphone, wenn Ausleihen in 7 bzw. 2 Tagen fällig sind und wenn ein Ausweis in 30 bzw. 7 Tagen abläuft, pro Ausweis und ohne Buchtitel:
 
 ```yaml
 alias: Bibliothek - Fälligkeiten melden
@@ -90,6 +91,9 @@ variables:
   days_ahead:
     - 7
     - 2
+  card_days_ahead:
+    - 30
+    - 7
 actions:
   - repeat:
       for_each: >
@@ -111,7 +115,18 @@ actions:
                   {% set parts.list = parts.list + [count ~ (' Medium' if count == 1 else ' Medien') ~ ' in ' ~ n ~ ' Tagen fällig'] %}
                 {% endif %}
               {% endfor %}
-              {{ parts.list | join(', ') }}
+              {% set sentences = namespace(list=[]) %}
+              {% if parts.list %}
+                {% set sentences.list = [parts.list | join(', ') ~ '.'] %}
+              {% endif %}
+              {% set valid = state_attr(repeat.item, 'card_valid_until') %}
+              {% if valid %}
+                {% set left = (strptime(valid, '%Y-%m-%d').date() - now().date()).days %}
+                {% if left in card_days_ahead %}
+                  {% set sentences.list = sentences.list + ['Der Ausweis läuft in ' ~ left ~ ' Tagen ab.'] %}
+                {% endif %}
+              {% endif %}
+              {{ sentences.list | join(' ') }}
         - condition: template
           value_template: "{{ message | length > 0 }}"
         - repeat:
@@ -120,7 +135,7 @@ actions:
               - action: "{{ repeat.item }}"
                 data:
                   title: Bibliothek
-                  message: "Ausweis {{ card_name }}: {{ message }}."
+                  message: "Ausweis {{ card_name }}: {{ message }}"
 mode: single
 ```
 
