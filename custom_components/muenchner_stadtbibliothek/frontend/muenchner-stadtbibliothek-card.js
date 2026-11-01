@@ -7,14 +7,16 @@
  *   title       heading when only one card is shown (default: its name)
  *   show_card   show "card valid until" in the header (default: true)
  *   show_library  show the library next to the author (default: true)
+ *   max_width   maximum width in px, centered (default: 640, 0 = full width)
  *   loan_days   loan period in days, full ring (default: 28)
  *   appearance  auto | light | dark (default: auto = theme)
  */
 
-const VERSION = "0.3.2";
+const VERSION = "0.3.3";
 const DOMAIN = "muenchner_stadtbibliothek";
 const CARD_TYPE = "muenchner-stadtbibliothek-card";
 const DEFAULT_LOAN_DAYS = 28;
+const DEFAULT_MAX_WIDTH = 640; // px; the card stays readable in wide pop-ups and panels (0 = no limit)
 const SOON_DAYS = 3; // remaining days shown in the warning color
 const APPEARANCES = ["auto", "light", "dark"];
 const ALL = "__all__"; // editor value for "all accounts as pills"
@@ -41,6 +43,7 @@ const TEXTS = {
     editor_title: "Titel (leer = Name des Ausweises)",
     editor_show_card: "Ausweis-Gültigkeit anzeigen",
     editor_show_library: "Bibliothek anzeigen",
+    editor_max_width: "Maximale Breite (px, 0 = volle Breite)",
     editor_loan_days: "Leihfrist (Tage, voller Ring)",
     editor_appearance: "Darstellung",
     appearance_auto: "Wie Theme",
@@ -68,6 +71,7 @@ const TEXTS = {
     editor_title: "Title (empty = name of the card)",
     editor_show_card: "Show card validity",
     editor_show_library: "Show library",
+    editor_max_width: "Maximum width (px, 0 = full width)",
     editor_loan_days: "Loan period (days, full ring)",
     editor_appearance: "Appearance",
     appearance_auto: "Like theme",
@@ -242,6 +246,8 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     const hass = this._hass;
     const appearance = APPEARANCES.includes(this._config.appearance) ? this._config.appearance : "auto";
     this._card.className = appearance === "auto" ? "" : `mode-${appearance}`;
+    const maxWidth = Number(this._config.max_width ?? DEFAULT_MAX_WIDTH);
+    this._card.style.maxWidth = maxWidth > 0 ? `${maxWidth}px` : "";
 
     const accounts = this._accounts();
     if (!accounts.length) {
@@ -350,7 +356,7 @@ const CARD_STYLE = `
 :host { display:block; }
 ha-card.mode-light { color-scheme:light; --primary-text-color:#212121; --secondary-text-color:#5f6368; --divider-color:rgba(0,0,0,.12); --card-background-color:#fff; --ha-card-background:#fff; --ha-card-border-color:#e0e0e0; --lib-tile:#f4f6f8; }
 ha-card.mode-dark { color-scheme:dark; --primary-text-color:#e1e1e1; --secondary-text-color:#a3a9b3; --divider-color:rgba(225,225,225,.12); --card-background-color:#1c1c1c; --ha-card-background:#1c1c1c; --ha-card-border-color:rgba(225,225,225,.12); --lib-tile:#262626; }
-ha-card { display:block; padding:16px; color:var(--primary-text-color); container-type:inline-size; }
+ha-card { display:block; box-sizing:border-box; margin:0 auto; padding:16px; color:var(--primary-text-color); container-type:inline-size; }
 .head { display:flex; align-items:baseline; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
 .title { font-size:1.25em; font-weight:500; flex:1; min-width:0; }
 .tabs { display:flex; gap:6px; flex:1; flex-wrap:wrap; min-width:0; }
@@ -434,6 +440,7 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
         name: "",
         schema: [
           { name: "loan_days", selector: { number: { min: 7, max: 60, step: 1, mode: "box", unit_of_measurement: "d" } } },
+          { name: "max_width", selector: { number: { min: 0, max: 2000, step: 10, mode: "box", unit_of_measurement: "px" } } },
           {
             name: "appearance",
             selector: { select: { mode: "dropdown", options: APPEARANCES.map((value) => ({ value, label: t(hass, `appearance_${value}`) })) } },
@@ -466,6 +473,7 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
       account: this._accountValue(),
       title: this._config.title ?? "",
       loan_days: this._config.loan_days ?? DEFAULT_LOAN_DAYS,
+      max_width: this._config.max_width ?? DEFAULT_MAX_WIDTH,
       appearance: this._config.appearance || "auto",
       show_card: this._config.show_card !== false,
       show_library: this._config.show_library !== false,
@@ -482,6 +490,8 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
     else delete config.title;
     if (value.loan_days && Number(value.loan_days) !== DEFAULT_LOAN_DAYS) config.loan_days = Number(value.loan_days);
     else delete config.loan_days;
+    if (value.max_width !== undefined && value.max_width !== "" && Number(value.max_width) !== DEFAULT_MAX_WIDTH) config.max_width = Number(value.max_width);
+    else delete config.max_width;
     if (value.appearance && value.appearance !== "auto") config.appearance = value.appearance;
     else delete config.appearance;
     if (value.show_card === false) config.show_card = false;
