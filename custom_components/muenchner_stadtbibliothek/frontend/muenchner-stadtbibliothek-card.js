@@ -12,12 +12,13 @@
  *   appearance  auto | light | dark (default: auto = theme)
  */
 
-const VERSION = "0.3.4";
+const VERSION = "0.3.5";
 const DOMAIN = "muenchner_stadtbibliothek";
 const CARD_TYPE = "muenchner-stadtbibliothek-card";
 const DEFAULT_LOAN_DAYS = 28;
 const DEFAULT_MAX_WIDTH = 640; // px; the card stays readable in wide pop-ups and panels (0 = no limit)
 const SOON_DAYS = 3; // remaining days shown in the warning color
+const FAILED_LOCK_MS = 5000; // a failed renewal keeps its button locked this long
 const APPEARANCES = ["auto", "light", "dark"];
 const ALL = "__all__"; // editor value for "all accounts as pills"
 
@@ -33,6 +34,7 @@ const TEXTS = {
     renew: "Verlängern",
     renew_label: "{title} verlängern",
     renewing: "Verlängere …",
+    failed: "Fehlgeschlagen",
     renewed: "Heute verlängert",
     empty: "Keine Ausleihen",
     unavailable: "Keine Daten",
@@ -61,6 +63,7 @@ const TEXTS = {
     renew: "Renew",
     renew_label: "Renew {title}",
     renewing: "Renewing …",
+    failed: "Failed",
     renewed: "Renewed today",
     empty: "No loans",
     unavailable: "No data",
@@ -182,6 +185,7 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     this._card.addEventListener("click", (e) => this._onClick(e));
     this._config = {};
     this._pending = new Set(); // barcodes being renewed right now
+    this._failed = new Map(); // barcode -> timer of the lock after a failed renewal
     this._active = null; // id of the account shown when there are pills
     this._size = 3;
   }
@@ -318,10 +322,14 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
       action = `<div class="pill done" role="img" aria-label="${esc(t(hass, "renewed"))}">${DONE_ICON}<span class="label">${esc(t(hass, "renewed"))}</span></div>`;
     } else if (loan.renewable && buttonId) {
       const pending = this._pending.has(loan.barcode);
-      action = `<button type="button" class="pill renew" data-button="${esc(buttonId)}" data-barcode="${esc(loan.barcode)}"
-                  aria-label="${esc(t(hass, "renew_label", { title: loan.title }))}" ${pending ? "disabled" : ""}>
-                  ${pending ? `<span class="spin">${RENEW_ICON}</span><span class="label">${esc(t(hass, "renewing"))}</span>` : `${RENEW_ICON}<span class="label">${esc(t(hass, "renew"))}</span>`}
-                </button>`;
+      const failed = !pending && this._failed.has(loan.barcode);
+      const content = pending
+        ? `<span class="spin">${RENEW_ICON}</span><span class="label">${esc(t(hass, "renewing"))}</span>`
+        : failed
+          ? `<span class="label">${esc(t(hass, "failed"))}</span>`
+          : `${RENEW_ICON}<span class="label">${esc(t(hass, "renew"))}</span>`;
+      action = `<button type="button" class="pill renew${failed ? " failed" : ""}" data-button="${esc(buttonId)}" data-barcode="${esc(loan.barcode)}"
+                  aria-label="${esc(t(hass, "renew_label", { title: loan.title }))}" ${pending || failed ? "disabled" : ""}>${content}</button>`;
     }
 
     return `<div class="row ${tone}">
@@ -349,12 +357,21 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     const button = event.target.closest("button[data-button]");
     if (!button || button.disabled) return;
     const barcode = button.dataset.barcode;
+    if (this._pending.has(barcode) || this._failed.has(barcode)) return; // one press at a time
+    button.disabled = true; // at once, before the next render
     this._pending.add(barcode);
     this._render();
     try {
       await this._hass.callService("button", "press", { entity_id: button.dataset.button });
     } catch (e) {
-      // Home Assistant shows the error message itself
+      // Home Assistant shows the error message; the button stays locked for a few seconds
+      this._failed.set(
+        barcode,
+        setTimeout(() => {
+          this._failed.delete(barcode);
+          this._render();
+        }, FAILED_LOCK_MS)
+      );
     } finally {
       this._pending.delete(barcode);
       this._render();
@@ -398,6 +415,7 @@ ha-card { display:block; box-sizing:border-box; margin:0 auto; padding:16px; col
 .pill.renew:hover { background:color-mix(in srgb, var(--primary-color) 26%, transparent); }
 .pill.renew:focus-visible { outline:2px solid var(--primary-color); outline-offset:2px; }
 .pill.renew[disabled] { cursor:default; opacity:.7; }
+.pill.renew.failed { background:color-mix(in srgb, var(--error-color, #db4437) 18%, transparent); color:var(--error-color, #db4437); opacity:1; }
 .pill.done { background:color-mix(in srgb, var(--success-color, #43a047) 18%, transparent); color:var(--success-color, #43a047); }
 .pill.done svg { display:none; }
 .message { padding:8px 4px; color:var(--secondary-text-color); }

@@ -47,6 +47,7 @@ scripts/release_notes.py  release notes from commit subjects
 
 - One row per loan: ring with remaining days (full ring = `loan_days`, default 28; orange <= 3 days, red + red border when overdue), title (1.08em, 2 lines), author · library (library optional: `show_library`), due date.
 - Right side: "Verlängern" pill (primary color 18 %) only when `renewable`; green "Heute verlängert" pill when `renewed_today`; nothing otherwise. No error display in the card (HA shows the error). Narrow columns (< 400 px): icon-only pills.
+- One press at a time: the pill is disabled while the press runs ("Verlängere …") and for 5 s after a failure (red "Fehlgeschlagen"; the error text itself comes from HA). The coordinator also rejects a second renewal of the same barcode while one runs (any card or device).
 - Accounts = devices of the integration with a loans sensor (found via `hass.entities`, `translation_key`); name = device `name_by_user || name` (device name = entry title from the setup field "Name"). Several accounts: pills like in Sleek School Schedule (active one kept per card instance); option `account` (name, case-insensitive, or the loans entity id; the 0.2.0 option `entity` still works) fixes one account and shows `title ?? name`.
 - The card finds the buttons by `barcode` attribute among the account's entities, the validity sensor by `translation_key`.
 - `max_width` (default 640 px, 0 = full width) limits and centers ha-card, e.g. in Bubble Card pop-ups.

@@ -110,6 +110,15 @@ async def test_renew(hass: HomeAssistant, fake) -> None:
     assert fake.renew_posts == 1, "a loan that is not renewable must not be sent to the catalog"
 
 
+async def test_second_press_while_renewing_is_rejected(hass: HomeAssistant, fake) -> None:
+    entry = await _setup(hass)
+    coordinator = entry.runtime_data
+    coordinator._renewing.add("00000100000002")
+    with pytest.raises(HomeAssistantError):
+        await coordinator.async_renew("00000100000002")
+    assert fake.renew_posts == 0
+
+
 async def test_returned_loan_removes_button(hass: HomeAssistant, fake) -> None:
     entry = await _setup(hass)
     fake.loans.pop(0)

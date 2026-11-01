@@ -98,6 +98,9 @@
     },
     "connection_failed": {
       "message": "The catalog is not reachable: {reason}"
+    },
+    "renew_running": {
+      "message": "A renewal of this item is already running."
     }
   }
 }

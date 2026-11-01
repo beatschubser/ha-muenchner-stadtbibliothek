@@ -39,6 +39,7 @@ class LibraryCoordinator(DataUpdateCoordinator[AccountData]):
             update_interval=timedelta(hours=hours),
         )
         self.client = client
+        self._renewing: set[str] = set()  # barcodes with a renewal in progress
 
     async def _async_update_data(self) -> AccountData:
         try:
@@ -49,6 +50,16 @@ class LibraryCoordinator(DataUpdateCoordinator[AccountData]):
             raise UpdateFailed(str(err)) from err
 
     async def async_renew(self, barcode: str) -> None:
+        """Renew one loan once; a second press while it runs (any card, any device) is rejected."""
+        if barcode in self._renewing:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="renew_running")
+        self._renewing.add(barcode)
+        try:
+            await self._async_renew(barcode)
+        finally:
+            self._renewing.discard(barcode)
+
+    async def _async_renew(self, barcode: str) -> None:
         """Renew one loan and show the catalog's answer right away."""
         try:
             result = await self.client.async_renew(barcode)
