@@ -14,7 +14,7 @@
  *   appearance  auto | light | dark (default: auto = theme)
  */
 
-const VERSION = "0.5.2";
+const VERSION = "0.5.3";
 const DOMAIN = "muenchner_stadtbibliothek";
 const CARD_TYPE = "muenchner-stadtbibliothek-card";
 const DEFAULT_LOAN_DAYS = 28;
@@ -509,7 +509,8 @@ ha-card { display:block; box-sizing:border-box; margin:0 auto; padding:16px; col
 .row.overdue { --lib-tone:var(--error-color, #db4437); }
 .text { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; padding-top:2px; }
 .name { font-size:1.08em; font-weight:500; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.meta { font-size:.8em; color:var(--secondary-text-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.meta { font-size:.8em; color:var(--secondary-text-color); line-height:1.35; overflow:hidden;
+        display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 .due { font-size:.85em; font-weight:500; color:var(--lib-tone); }
 .row.normal .due { color:var(--secondary-text-color); }
 /* round action buttons, vertically centered */
@@ -536,6 +537,7 @@ ha-card { display:block; box-sizing:border-box; margin:0 auto; padding:16px; col
   .placeholder { padding:6px; }
   .placeholder span { font-size:9px; }
   .ring { width:36px; height:36px; }
+  .meta { -webkit-line-clamp:1; }
   .act { width:44px; height:44px; }
 }
 `;
