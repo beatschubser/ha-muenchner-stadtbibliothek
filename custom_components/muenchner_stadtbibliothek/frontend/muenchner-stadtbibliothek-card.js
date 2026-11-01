@@ -14,7 +14,7 @@
  *   appearance  auto | light | dark (default: auto = theme)
  */
 
-const VERSION = "0.5.0";
+const VERSION = "0.5.1";
 const DOMAIN = "muenchner_stadtbibliothek";
 const CARD_TYPE = "muenchner-stadtbibliothek-card";
 const DEFAULT_LOAN_DAYS = 28;
@@ -425,7 +425,7 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     </div>`;
   }
 
-  /** Cover from the catalog (scaled into a fixed frame, bottom aligned) or a colored placeholder with the title. */
+  /** Cover stored by the integration (scaled into a fixed frame, top aligned) or a colored placeholder with the title. */
   _cover(loan) {
     if (loan.cover_url && !this._brokenCovers.has(loan.cover_url)) {
       return `<div class="cover"><img src="${esc(loan.cover_url)}" alt="" loading="lazy" data-cover="${esc(loan.cover_url)}"></div>`;
@@ -491,8 +491,8 @@ ha-card { display:block; box-sizing:border-box; margin:0 auto; padding:16px; col
 .row { display:flex; align-items:flex-start; gap:12px; padding:10px 12px; border-radius:12px; border:1px solid transparent;
        background:var(--lib-tile, color-mix(in srgb, var(--primary-text-color) 5%, var(--card-background-color, var(--ha-card-background, #fff)))); }
 .row.overdue { border-color:var(--error-color, #db4437); }
-/* cover: fixed frame, image scaled in without cropping and aligned to the bottom */
-.cover { width:84px; height:124px; flex-shrink:0; display:flex; align-items:flex-end; justify-content:center; }
+/* cover: fixed frame, image scaled in without cropping and aligned to the top */
+.cover { width:84px; height:124px; flex-shrink:0; display:flex; align-items:flex-start; justify-content:center; }
 .cover img { display:block; max-width:100%; max-height:100%; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.45); }
 .placeholder { box-sizing:border-box; width:100%; height:100%; border-radius:6px; padding:8px; display:flex; align-items:flex-end;
                background:linear-gradient(160deg, var(--lib-cover) 0%, rgba(0,0,0,.6) 150%); box-shadow:0 2px 8px rgba(0,0,0,.45); color:#fff; }
