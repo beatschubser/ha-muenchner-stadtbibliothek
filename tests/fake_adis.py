@@ -57,6 +57,7 @@ class FakeAdis:
     requests: list[str] = field(default_factory=list)
     renew_posts: int = 0
     searches: list[tuple[str, str, str]] = field(default_factory=list)
+    cover_requests: list[tuple[str, str]] = field(default_factory=list)  # (path, referer)
     hits: list[str] = field(default_factory=list)
 
     # ---- rendering ----------------------------------------------------------
@@ -119,7 +120,8 @@ class FakeAdis:
             ean = self.hits[0]
             body = f"""<table><tr><th scope="row">Titel</th><td>Testtitel</td></tr>
 <tr><th scope="row">ISBN</th><td>{ean[3:6]}-{ean[6:12]}-{ean[12]} <br> {ean[3:12]}X</td></tr>
-<tr><th scope="row">Nummer</th><td>{ean} (Europäische Artikelnummerierung (EAN))</td></tr></table>"""
+<tr><th scope="row">Nummer</th><td>{ean} (Europäische Artikelnummerierung (EAN))</td></tr></table>
+<aside><img src="/aDISWeb_kopac86/img/medien/buch.svg" alt="Buch"><img src="/vlb/cover/{ean}/m" alt=""></aside>"""
             return self._page("Vollanzeige - Katalog", body, ["Suchen", "Erweiterte Suche", "Bestellen/Vormerken"])
         if self.view == "results":
             body = f"<p>Treffer: {len(self.hits)}</p>" + "".join(f"<div>Treffer {n}</div>" for n in range(len(self.hits)))
@@ -147,10 +149,17 @@ class FakeAdis:
 
     # ---- requests -------------------------------------------------------------
 
-    def handle(self, method: str, url: str, data: list[tuple[str, str]] | None = None) -> tuple[int, str]:
+    def handle(self, method: str, url: str, data: list[tuple[str, str]] | None = None, headers: dict | None = None) -> tuple[int, str | bytes]:
         """Answer one request: (302/303, location) or (200, html)."""
         parts = urlsplit(url)
         path, query = parts.path, parse_qs(parts.query)
+        if method == "GET" and path.startswith("/vlb/cover/"):
+            # like the real cover service: only for requests coming from a catalog page
+            referer = (headers or {}).get("Referer", "")
+            self.cover_requests.append((path, referer))
+            if "/aDISWeb/" not in referer:
+                return 403, "<html>Forbidden</html>"
+            return 200, b"\xff\xd8\xff\xe0fake-jpeg-" + path.encode()
         form: dict[str, list[str]] = {}
         for key, value in data or []:
             form.setdefault(key, []).append(value)
@@ -238,12 +247,17 @@ class FakeAdis:
 
 
 class _Response:
-    def __init__(self, status: int, text: str, url: str) -> None:
-        self.status, self._text = status, text
+    def __init__(self, status: int, body: str | bytes, url: str) -> None:
+        self.status, self._body = status, body
         self.url = _Url(url)
+        self.content_type = "image/jpeg" if isinstance(body, bytes) else "text/html"
+        self.reason = "OK" if status == 200 else "Error"
 
     async def text(self) -> str:
-        return self._text
+        return self._body if isinstance(self._body, str) else self._body.decode("latin-1")
+
+    async def read(self) -> bytes:
+        return self._body if isinstance(self._body, bytes) else self._body.encode()
 
     async def __aenter__(self):
         return self
@@ -270,9 +284,11 @@ class FakeSession:
         self.fake, self.base = fake, base
         self.cookie_jar = _CookieJar()
 
-    def request(self, method, url, data=None, **_kwargs) -> _Response:
+    def request(self, method, url, data=None, headers=None, **_kwargs) -> _Response:
+        if url.startswith("/"):
+            url = self.base + url
         for _ in range(10):
-            status, body = self.fake.handle(method, url, list(data or []))
+            status, body = self.fake.handle(method, url, list(data or []), headers)
             if status in (301, 302, 303):
                 url, method, data = self.base + body, "GET", None
                 continue

@@ -41,7 +41,7 @@
           "lookup_covers": "Look up covers"
         },
         "data_description": {
-          "lookup_covers": "Searches every new item once in the catalog (title, shelf mark, library) and keeps its ISBN for the cover. Two extra page loads per new item."
+          "lookup_covers": "Searches every new item once in the catalog (title, shelf mark, library), loads its cover and stores it in Home Assistant. Three extra page loads per new item."
         }
       }
     }

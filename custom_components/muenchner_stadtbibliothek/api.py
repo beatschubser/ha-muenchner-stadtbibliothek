@@ -11,6 +11,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from urllib.parse import urlsplit, urlunsplit
 
 import aiohttp
 
@@ -23,7 +24,9 @@ from .const import (
     BUTTON_TO_OVERVIEW,
     DEFAULT_BASE_URL,
     LINK_ACCOUNT,
+    COVER_URL,
     LINK_LOGOUT,
+    MAX_COVER_BYTES,
     MAX_LOOKUPS_PER_UPDATE,
     REQUEST_TIMEOUT,
     SEARCH_FIELD_SIGNATURE,
@@ -43,6 +46,7 @@ from .parser import (
     login_submit_button,
     page_message,
     parse_card_valid_until,
+    parse_cover_src,
     parse_isbn,
     parse_loans,
     parse_login_form,
@@ -85,8 +89,17 @@ class AccountData:
     card_valid_until: date | None
     loans: list[Loan] = field(default_factory=list)
     updated: datetime = field(default_factory=datetime.now)
-    # catalog searches done in this update: barcode -> ISBN, or None when no unique record was found
-    looked_up: dict[str, str | None] = field(default_factory=dict)
+    # catalog searches done in this update: barcode -> result (ISBN None when no unique record was found)
+    looked_up: dict[str, "Lookup"] = field(default_factory=dict)
+
+
+@dataclass
+class Lookup:
+    """Result of one catalog search."""
+
+    isbn: str | None
+    cover: bytes | None = None
+    content_type: str | None = None
 
 
 @dataclass
@@ -96,6 +109,15 @@ class RenewResult:
     account: AccountData
     loan: Loan | None
     message: str | None
+
+
+def browser_url(url: str) -> str:
+    """URL as a browser sends it: without the default port (the catalog redirects to ":443",
+    and the cover service rejects a referer with it)."""
+    parts = urlsplit(url)
+    if (parts.scheme, parts.port) in (("https", 443), ("http", 80)):
+        parts = parts._replace(netloc=parts.hostname or "")
+    return urlunsplit(parts)
 
 
 class LibraryClient:
@@ -131,6 +153,33 @@ class LibraryClient:
                 return await resp.text(), str(resp.url)
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             raise LibraryConnectionError(f"{type(err).__name__}: {err}".rstrip(": ")) from err
+
+    async def _fetch_image(self, url: str, referer: str) -> tuple[bytes, str] | None:
+        """Load an image the way the browser does when it shows the page `referer`."""
+        url, referer = browser_url(url), browser_url(referer)
+        try:
+            async with self._session.request(
+                "GET",
+                url,
+                headers={
+                    "User-Agent": USER_AGENT,
+                    "Accept": "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8",
+                    "Referer": referer,
+                },
+                timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
+                allow_redirects=True,
+            ) as resp:
+                content_type = (resp.content_type or "").lower()
+                if resp.status != 200 or not content_type.startswith("image/"):
+                    _LOGGER.debug("Cover %s: HTTP %s %s", url, resp.status, content_type)
+                    return None
+                body = await resp.read()
+                if not body or len(body) > MAX_COVER_BYTES:
+                    return None
+                return body, content_type
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+            _LOGGER.debug("Cover %s: %s", url, err)
+            return None
 
     async def _load(self, method: str, url: str, data: list[tuple[str, str]] | None = None) -> tuple[AdisPage, str]:
         html, final_url = await self._request(method, url, data)
@@ -205,14 +254,15 @@ class LibraryClient:
 
     # ---- public -----------------------------------------------------------
 
-    async def _lookup_isbns(self, page: AdisPage, loans: list[Loan]) -> tuple[AdisPage, dict[str, str | None]]:
+    async def _lookup_isbns(self, page: AdisPage, loans: list[Loan]) -> tuple[AdisPage, dict[str, Lookup]]:
         """Search the catalog once per item like a user would (title + shelf mark + library).
 
-        Only a unique hit opens the full record directly; its ISBN is taken. Anything else
-        (no hit, a result list, a changed page) gives None. Errors stop the lookups but never
-        the update. Returns the last page (for the logout) and the results.
+        Only a unique hit opens the full record directly; its ISBN and its cover image (loaded
+        like the browser does for that page) are taken. Anything else (no hit, a result list,
+        a changed page) gives no ISBN. Errors stop the lookups but never the update. Returns
+        the last page (for the logout) and the results.
         """
-        results: dict[str, str | None] = {}
+        results: dict[str, Lookup] = {}
         try:
             if BUTTON_ADVANCED_SEARCH not in page.buttons and BUTTON_TO_OVERVIEW in page.buttons:
                 page, _ = await self._click_button(page, BUTTON_TO_OVERVIEW)
@@ -235,17 +285,23 @@ class LibraryClient:
                 name, label, _ = form.submit
                 data = [*values.items(), (name, label), (name, "pressed")]
                 page, _ = await self._load("POST", page.action, data)
-                results[loan.barcode] = parse_isbn(page)
-                _LOGGER.debug("Cover lookup for %s: %s", loan.barcode, results[loan.barcode] or "no unique record")
+                isbn = parse_isbn(page)
+                result = Lookup(isbn)
+                if isbn:
+                    image = await self._fetch_image(parse_cover_src(page) or COVER_URL.format(isbn=isbn), page.url)
+                    if image:
+                        result.cover, result.content_type = image
+                results[loan.barcode] = result
+                _LOGGER.debug("Cover lookup for %s: %s, cover %s", loan.barcode, isbn or "no unique record", bool(result.cover))
         except LibraryError as err:
             _LOGGER.debug("Cover lookup stopped: %s", err)
         return page, results
 
-    async def async_fetch(self, known_isbns: dict[str, str | None] | None = None) -> AccountData:
+    async def async_fetch(self, known: set[str] | None = None) -> AccountData:
         """Card validity and current loans.
 
-        known_isbns: results of earlier lookups (barcode -> ISBN or None). None disables lookups;
-        otherwise items not in it are searched in the catalog once.
+        known: barcodes searched earlier. None disables lookups; otherwise items not in it are
+        searched in the catalog once (results in AccountData.looked_up).
         """
         async with self._lock:
             overview = await self._login()
@@ -256,13 +312,11 @@ class LibraryClient:
                 loans = parse_loans(loans_page) if loans_page else []
                 if loans_page is not None:
                     last = loans_page
-                looked_up: dict[str, str | None] = {}
-                if known_isbns is not None:
-                    new = [loan for loan in loans if loan.barcode not in known_isbns]
+                looked_up: dict[str, Lookup] = {}
+                if known is not None:
+                    new = [loan for loan in loans if loan.barcode not in known]
                     if new:
                         last, looked_up = await self._lookup_isbns(last, new)
-                    for loan in loans:
-                        loan.isbn = looked_up.get(loan.barcode) or known_isbns.get(loan.barcode)
                 return AccountData(valid, loans, looked_up=looked_up)
             finally:
                 await self._logout(last)

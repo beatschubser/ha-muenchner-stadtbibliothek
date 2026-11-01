@@ -41,7 +41,7 @@
           "lookup_covers": "Cover nachschlagen"
         },
         "data_description": {
-          "lookup_covers": "Sucht jedes neue Medium einmal im Katalog (Titel, Signatur, Bibliothek) und merkt sich die ISBN für das Cover. Pro neuem Medium zwei zusätzliche Seitenaufrufe."
+          "lookup_covers": "Sucht jedes neue Medium einmal im Katalog (Titel, Signatur, Bibliothek), lädt dabei das Cover und speichert es in Home Assistant. Drei zusätzliche Seitenaufrufe pro neuem Medium."
         }
       }
     }

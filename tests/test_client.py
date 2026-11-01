@@ -120,24 +120,28 @@ def test_fetch():
 
 def test_cover_lookup_once_per_item():
     fake = FakeAdis()
-    data = run(fake, lambda c: c.async_fetch({}))
+    data = run(fake, lambda c: c.async_fetch(set()))
     assert fake.searches == [
         ("Der kleine Testdrache", "k BEI", "Testbibliothek"),
         ("Kochen ohne Herd", "u KOC", "Testbibliothek"),
         ("Reise zum Mond", "b PRO", "Testbibliothek"),
     ]
-    assert data.looked_up == {"00000100000001": "9783000000002", "00000100000002": None, "00000100000003": None}
-    first = data.loans[0].as_dict()
-    assert first["isbn"] == "9783000000002"
-    assert first["cover_url"] == "https://ssl.muenchen.de/vlb/cover/9783000000002/m"
-    assert data.loans[1].as_dict()["cover_url"] is None
+    found = data.looked_up["00000100000001"]
+    assert found.isbn == "9783000000002"
+    assert found.cover.startswith(b"\xff\xd8") and found.content_type == "image/jpeg"
+    # the cover is loaded once, right after the record page and with it as referer (like a browser)
+    assert len(fake.cover_requests) == 1
+    path, referer = fake.cover_requests[0]
+    assert path == "/vlb/cover/9783000000002/m" and "/aDISWeb/" in referer
+    assert data.looked_up["00000100000002"].isbn is None, "two hits: no unique record"
+    assert data.looked_up["00000100000003"].isbn is None
     assert not fake.logged_in, "client must log out after the lookups"
 
     # known items are not searched again
     fake2 = FakeAdis()
-    data2 = run(fake2, lambda c: c.async_fetch(data.looked_up))
-    assert fake2.searches == []
-    assert data2.loans[0].isbn == "9783000000002"
+    data2 = run(fake2, lambda c: c.async_fetch(set(data.looked_up)))
+    assert fake2.searches == [] and fake2.cover_requests == []
+    assert data2.looked_up == {}
 
     # lookups switched off
     fake3 = FakeAdis()
@@ -155,6 +159,11 @@ def test_search_form_of_the_real_catalog():
     assert form.operators == ["$Select$1", "$Select$3"]
     assert form.submit == ("$Button$5", "Suchen", "$$GFBO_4"), "the form's own button, not the one in the header"
     assert ("imageButton", "") not in form.fields
+
+
+def test_browser_url_drops_default_port():
+    assert api.browser_url("https://ssl.muenchen.de:443/aDISWeb/x/app/opac/2") == "https://ssl.muenchen.de/aDISWeb/x/app/opac/2"
+    assert api.browser_url("https://catalog.test:8443/a") == "https://catalog.test:8443/a"
 
 
 def test_isbn_from_isbn10():

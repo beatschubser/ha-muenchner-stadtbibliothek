@@ -88,12 +88,14 @@ async def test_sensors_and_buttons(hass: HomeAssistant, fake) -> None:
     assert loans.attributes["card_valid_until"] == "2030-12-31"
     assert loans.attributes["loans"][0]["title"] == "Der kleine Testdrache"
     # cover lookup: unique hit for the first item, none for the others; every item searched once
-    assert loans.attributes["loans"][0]["cover_url"] == "https://ssl.muenchen.de/vlb/cover/9783000000002/m"
+    first = loans.attributes["loans"][0]
+    assert first["isbn"] == "9783000000002"
+    assert first["cover_url"] == "/muenchner_stadtbibliothek_files/covers/9783000000002.jpg"
     assert loans.attributes["loans"][1]["cover_url"] is None
-    assert len(fake.searches) == 3
+    assert len(fake.searches) == 3 and len(fake.cover_requests) == 1
     await entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
-    assert len(fake.searches) == 3, "known items are not searched again"
+    assert len(fake.searches) == 3 and len(fake.cover_requests) == 1, "known items are not searched again"
 
     buttons = _button_ids(hass, entry)
     assert len(buttons) == 3
@@ -137,12 +139,20 @@ async def test_returned_loan_removes_button(hass: HomeAssistant, fake) -> None:
 
 
 async def test_card_is_served(hass: HomeAssistant, hass_client, fake) -> None:
-    await _setup(hass)
+    entry = await _setup(hass)
+    await hass.async_add_executor_job(lambda: None)
+    assert entry.runtime_data.data.loans[0].cover_url
     client = await hass_client()
     response = await client.get("/muenchner_stadtbibliothek_files/muenchner-stadtbibliothek-card.js")
     assert response.status == 200
     assert "muenchner-stadtbibliothek-card" in await response.text()
     response = await client.get("/muenchner_stadtbibliothek_files/manifest.json")
+    assert response.status == 404
+    # the stored cover is served by Home Assistant
+    response = await client.get("/muenchner_stadtbibliothek_files/covers/9783000000002.jpg")
+    assert response.status == 200
+    assert (await response.read()).startswith(b"\xff\xd8")
+    response = await client.get("/muenchner_stadtbibliothek_files/covers/9783000000019.jpg")
     assert response.status == 404
 
 

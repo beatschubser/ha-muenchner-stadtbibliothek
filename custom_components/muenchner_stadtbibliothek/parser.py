@@ -15,7 +15,7 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup, Tag
 
 from .const import (
-    COVER_URL,
+    COVER_PATH,
     COLUMN_DUE,
     COLUMN_HINT,
     COLUMN_LIBRARY,
@@ -51,6 +51,7 @@ class Loan:
     renewals: int | None
     checkbox: str | None = None  # value of the row checkbox, only valid for the page it came from
     isbn: str | None = None  # ISBN-13/EAN from the catalog record, looked up once per item
+    cover_url: str | None = None  # cover stored in Home Assistant (local URL), set by the coordinator
 
     def as_dict(self) -> dict:
         """Attributes for Home Assistant (dates as ISO strings, no page specific data)."""
@@ -58,7 +59,6 @@ class Loan:
         data.pop("checkbox")
         data["due_date"] = self.due_date.isoformat() if self.due_date else None
         data["renewed_today"] = renewed_today(self)
-        data["cover_url"] = COVER_URL.format(isbn=self.isbn) if self.isbn else None
         return data
 
 
@@ -355,4 +355,15 @@ def parse_isbn(page: AdisPage) -> str | None:
             return digits
         if len(digits) == 10 and digits[:9].isdigit():
             return _isbn10_to_13(digits)
+    return None
+
+
+def parse_cover_src(page: AdisPage) -> str | None:
+    """Absolute URL of the cover image on a full record page (the catalog's own cover service)."""
+    if page.soup is None:
+        return None
+    for img in page.soup.find_all("img"):
+        src = img.get("src") or ""
+        if COVER_PATH in src:
+            return urljoin(page.url, src)
     return None

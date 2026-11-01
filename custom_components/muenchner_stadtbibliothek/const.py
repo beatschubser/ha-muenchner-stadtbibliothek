@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "muenchner_stadtbibliothek"
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 
 # Library catalog (aDIS/BMS by aStec). Changeable in case the library moves the catalog.
 DEFAULT_BASE_URL = "https://ssl.muenchen.de"
@@ -37,9 +37,15 @@ SEARCH_FIELD_TITLE = "Titel"
 SEARCH_FIELD_SIGNATURE = "Signatur"
 SEARCH_OPERATOR_AND = "UND"
 
-# Covers: the catalog's own cover service (VLB), loaded by the browser directly
-COVER_URL = DEFAULT_BASE_URL + "/vlb/cover/{isbn}/m"
-MAX_LOOKUPS_PER_UPDATE = 10  # catalog searches for new items per update (2 page loads each)
+# Covers: the catalog's own cover service (VLB). It only answers requests coming from a catalog
+# page (hotlink protection), so the cover is loaded once right after the full record page, like a
+# browser showing that page does, and then stored and served by Home Assistant.
+COVER_PATH = "/vlb/cover/"
+COVER_URL = DEFAULT_BASE_URL + COVER_PATH + "{isbn}/m"  # fallback when the record page has no image
+MAX_COVER_BYTES = 2_000_000
+COVER_DIR = f"{DOMAIN}_covers"  # below the .storage folder of Home Assistant
+COVER_URL_PATH = "/" + DOMAIN + "_files/covers/{file}"
+MAX_LOOKUPS_PER_UPDATE = 10  # catalog searches for new items per update (3 page loads each)
 CONF_LOOKUP_COVERS = "lookup_covers"
 DEFAULT_LOOKUP_COVERS = True
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 from aiohttp import web
@@ -10,7 +11,9 @@ from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
-from .const import CARD_FILE, CARD_URL, FRONTEND_URL, VERSION
+from .const import CARD_FILE, CARD_URL, COVER_DIR, FRONTEND_URL, VERSION
+
+COVER_FILE = re.compile(r"^covers/(\d{13}\.(?:jpg|png|webp|gif))$")
 
 _LOGGER = logging.getLogger(__name__)
 FOLDER = Path(__file__).parent / "frontend"
@@ -28,10 +31,19 @@ class FrontendView(HomeAssistantView):
     name = "muenchner_stadtbibliothek:frontend"
     requires_auth = False  # loaded by the browser as a module, like /local files
 
-    def __init__(self, files: dict[str, Path]) -> None:
+    def __init__(self, hass: HomeAssistant, files: dict[str, Path], cover_dir: Path) -> None:
+        self._hass = hass
         self._files = files
+        self._cover_dir = cover_dir
 
     async def get(self, request: web.Request, path: str) -> web.StreamResponse:
+        # stored covers: file names are ISBNs, a cover never changes, so browsers may keep it
+        cover = COVER_FILE.match(path)
+        if cover:
+            file = self._cover_dir / cover.group(1)
+            if not await self._hass.async_add_executor_job(file.is_file):
+                raise web.HTTPNotFound()
+            return web.FileResponse(file, headers={"Cache-Control": "public, max-age=31536000, immutable"})
         file = self._files.get(path)
         if file is None:
             raise web.HTTPNotFound()
@@ -45,7 +57,7 @@ def _list_files() -> dict[str, Path]:
 
 async def async_register_view(hass: HomeAssistant) -> None:
     files = await hass.async_add_executor_job(_list_files)
-    hass.http.register_view(FrontendView(files))
+    hass.http.register_view(FrontendView(hass, files, Path(hass.config.path(".storage", COVER_DIR))))
 
 
 def _resources(hass: HomeAssistant):
