@@ -115,10 +115,10 @@ class LibraryClient:
                 allow_redirects=True,
             ) as resp:
                 if resp.status >= 400:
-                    raise LibraryConnectionError(f"HTTP {resp.status} for {resp.url.path}")
+                    raise LibraryConnectionError(f"HTTP {resp.status} {resp.reason or ''} ({resp.url.host}{resp.url.path})".replace("  ", " "))
                 return await resp.text(), str(resp.url)
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-            raise LibraryConnectionError(str(err) or type(err).__name__) from err
+            raise LibraryConnectionError(f"{type(err).__name__}: {err}".rstrip(": ")) from err
 
     async def _load(self, method: str, url: str, data: list[tuple[str, str]] | None = None) -> tuple[AdisPage, str]:
         html, final_url = await self._request(method, url, data)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "muenchner_stadtbibliothek"
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 # Library catalog (aDIS/BMS by aStec). Changeable in case the library moves the catalog.
 DEFAULT_BASE_URL = "https://ssl.muenchen.de"
@@ -30,5 +30,6 @@ COLUMN_HINT = "Hinweis"
 HINT_RENEWABLE = "verlängerbar"
 HINT_RENEWED_TODAY = "Heute verlängert"
 
-USER_AGENT = f"HomeAssistant-MuenchnerStadtbibliothek/{VERSION}"
+# browser compatible prefix, some web application firewalls reject unknown agents
+USER_AGENT = f"Mozilla/5.0 (compatible; HomeAssistant-MuenchnerStadtbibliothek/{VERSION})"
 REQUEST_TIMEOUT = 30
