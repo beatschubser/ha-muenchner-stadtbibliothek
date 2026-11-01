@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="custom_components/muenchner_stadtbibliothek/brand/icon.png" width="128" alt="Münchner Stadtbibliothek">
+</p>
+
 <h1 align="center">Münchner Stadtbibliothek</h1>
 
 <p align="center">
