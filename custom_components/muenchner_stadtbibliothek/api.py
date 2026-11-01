@@ -155,7 +155,12 @@ class LibraryClient:
             raise LibraryConnectionError(f"{type(err).__name__}: {err}".rstrip(": ")) from err
 
     async def _fetch_image(self, url: str, referer: str) -> tuple[bytes, str] | None:
-        """Load an image the way the browser does when it shows the page `referer`."""
+        """Load an image the way the browser does when it shows the page `referer`.
+
+        None means there is no cover (a clear answer, not searched again). Temporary problems
+        (timeout, connection error, server error) raise LibraryConnectionError: the item is then
+        searched again at the next update.
+        """
         url, referer = browser_url(url), browser_url(referer)
         try:
             async with self._session.request(
@@ -169,17 +174,18 @@ class LibraryClient:
                 timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
                 allow_redirects=True,
             ) as resp:
+                if resp.status >= 500:
+                    raise LibraryConnectionError(f"cover: HTTP {resp.status}")
                 content_type = (resp.content_type or "").lower()
                 if resp.status != 200 or not content_type.startswith("image/"):
-                    _LOGGER.debug("Cover %s: HTTP %s %s", url, resp.status, content_type)
+                    _LOGGER.debug("No cover at %s: HTTP %s %s", url, resp.status, content_type)
                     return None
                 body = await resp.read()
                 if not body or len(body) > MAX_COVER_BYTES:
                     return None
                 return body, content_type
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-            _LOGGER.debug("Cover %s: %s", url, err)
-            return None
+            raise LibraryConnectionError(f"cover: {type(err).__name__}: {err}".rstrip(": ")) from err
 
     async def _load(self, method: str, url: str, data: list[tuple[str, str]] | None = None) -> tuple[AdisPage, str]:
         html, final_url = await self._request(method, url, data)

@@ -157,6 +157,15 @@ def test_cover_lookup_continues_after_a_search_without_hit():
     assert data.looked_up["00000100000001"].isbn == "9783000000002"
 
 
+def test_temporary_cover_error_is_retried_next_time():
+    fake = FakeAdis(cover_failures=1)
+    data = run(fake, lambda c: c.async_fetch(set()))
+    assert "00000100000001" not in data.looked_up, "a temporary error must not be stored as 'no cover'"
+    assert not fake.logged_in
+    data2 = run(fake, lambda c: c.async_fetch(set(data.looked_up)))
+    assert data2.looked_up["00000100000001"].cover
+
+
 def test_search_form_of_the_real_catalog():
     html = (Path(__file__).resolve().parent / "fixtures" / "advanced_search.html").read_text(encoding="utf-8")
     page = parser.parse_page(html, "https://ssl.muenchen.de/aDISWeb/_session/app/opac/3")

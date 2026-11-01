@@ -59,6 +59,7 @@ class FakeAdis:
     searches: list[tuple[str, str, str]] = field(default_factory=list)
     cover_requests: list[tuple[str, str]] = field(default_factory=list)  # (path, referer)
     last_terms: tuple[str, str] = ("", "")
+    cover_failures: int = 0  # number of cover requests answered with a server error (temporary problem)
     hits: list[str] = field(default_factory=list)
 
     # ---- rendering ----------------------------------------------------------
@@ -161,6 +162,9 @@ class FakeAdis:
             self.cover_requests.append((path, referer))
             if "/aDISWeb/" not in referer:
                 return 403, "<html>Forbidden</html>"
+            if self.cover_failures:
+                self.cover_failures -= 1
+                return 503, "<html>Service Unavailable</html>"
             return 200, b"\xff\xd8\xff\xe0fake-jpeg-" + path.encode()
         form: dict[str, list[str]] = {}
         for key, value in data or []:
