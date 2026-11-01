@@ -55,6 +55,7 @@ class Loan:
         data = asdict(self)
         data.pop("checkbox")
         data["due_date"] = self.due_date.isoformat() if self.due_date else None
+        data["renewed_today"] = renewed_today(self)
         return data
 
 
