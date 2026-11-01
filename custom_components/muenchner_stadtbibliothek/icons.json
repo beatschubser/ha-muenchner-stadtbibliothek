@@ -1,0 +1,12 @@
+{
+  "entity": {
+    "sensor": {
+      "card_valid_until": { "default": "mdi:card-account-details-outline" },
+      "loans": { "default": "mdi:bookshelf" },
+      "next_due_date": { "default": "mdi:calendar-clock" }
+    },
+    "button": {
+      "renew": { "default": "mdi:book-refresh-outline" }
+    }
+  }
+}

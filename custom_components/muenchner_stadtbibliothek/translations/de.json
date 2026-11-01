@@ -1,0 +1,77 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bibliotheksausweis",
+        "description": "Ausweisnummer und Passwort des Kontos der Münchner Stadtbibliothek (wie im Online-Katalog).",
+        "data": {
+          "name": "Name",
+          "card_number": "Ausweisnummer",
+          "password": "Passwort"
+        },
+        "data_description": {
+          "name": "Wird als Gerätename angezeigt, z. B. der Name des Ausweisinhabers. Praktisch bei mehreren Ausweisen."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Erneut anmelden",
+        "description": "Der Katalog hat das Passwort für {name} abgelehnt. Bitte das aktuelle Passwort eingeben.",
+        "data": {
+          "password": "Passwort"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ausweisnummer oder Passwort ist falsch.",
+      "cannot_connect": "Der Katalog ist nicht erreichbar. Bitte später erneut versuchen.",
+      "unknown_page": "Der Katalog hat mit einer unerwarteten Seite geantwortet. Details stehen im Log."
+    },
+    "abort": {
+      "already_configured": "Dieser Ausweis ist bereits eingerichtet.",
+      "reauth_successful": "Passwort aktualisiert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Aktualisierungsintervall",
+        "description": "Bei jeder Aktualisierung meldet sich die Integration einmal am Katalog an und wieder ab. Fälligkeiten ändern sich selten, ein paar Stunden reichen.",
+        "data": {
+          "scan_interval_hours": "Aktualisieren alle"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "card_valid_until": { "name": "Ausweis gültig bis" },
+      "loans": {
+        "name": "Ausleihen",
+        "unit_of_measurement": "Medien",
+        "state_attributes": {
+          "loans": { "name": "Ausleihen" },
+          "renewable": { "name": "Verlängerbar" },
+          "last_update": { "name": "Letzte Aktualisierung" }
+        }
+      },
+      "next_due_date": {
+        "name": "Nächste Fälligkeit",
+        "state_attributes": {
+          "count": { "name": "Medien" },
+          "titles": { "name": "Titel" },
+          "renewable": { "name": "Alle verlängerbar" }
+        }
+      }
+    },
+    "button": {
+      "renew": { "name": "{title} verlängern" }
+    }
+  },
+  "exceptions": {
+    "renew_failed": { "message": "Verlängerung nicht möglich: {reason}" },
+    "not_renewable": { "message": "„{title}“ kann nicht verlängert werden: {hint}" },
+    "loan_gone": { "message": "Dieses Medium ist nicht mehr auf dem Ausweis." },
+    "auth_failed": { "message": "Der Katalog hat die Anmeldung abgelehnt. Bitte das Passwort erneut eingeben." },
+    "connection_failed": { "message": "Der Katalog ist nicht erreichbar: {reason}" }
+  }
+}
