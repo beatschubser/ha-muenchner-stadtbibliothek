@@ -5,7 +5,7 @@
 <h1 align="center">Münchner Stadtbibliothek</h1>
 
 <p align="center">
-  Library card and loans of the Münchner Stadtbibliothek in Home Assistant, with renewal at the press of a button.
+  Bibliotheksausweis und Ausleihen der Münchner Stadtbibliothek in Home Assistant, mit Verlängerung per Knopfdruck.
 </p>
 
 <p align="center">
@@ -15,68 +15,116 @@
 </p>
 
 > [!WARNING]
-> **Work in progress.** Unofficial integration, not affiliated with the Münchner Stadtbibliothek. It reads the account pages of the online catalog; if the library changes these pages, the integration may stop working until it is updated.
+> **In Entwicklung.** Inoffizielle Integration, kein Angebot der Münchner Stadtbibliothek. Sie liest die Kontoseiten des Online-Katalogs. Ändert die Bibliothek diese Seiten, funktioniert die Integration möglicherweise erst nach einem Update wieder.
 
 > [!NOTE]
-> The code is 100% AI-generated.
+> Der Code ist zu 100 % KI-generiert.
 
-## Features
+## Funktionen
 
-- **Card valid until** as a date sensor.
-- **Loans** with due date, library, title, author, shelf mark, barcode and the catalog's hint (e.g. "verlängerbar", "Heute verlängert").
-- **Next due date** with the titles due on that day.
-- **One renew button per loan.** Buttons appear and disappear with the loans. Items that cannot be renewed are not sent to the catalog; pressing their button shows the reason instead.
-- Several cards (e.g. one per family member), each with its own device.
-- Low traffic: every update is one short catalog session (login, overview, loans, logout). Default interval 4 hours, adjustable from 1 to 48 hours.
+- **Ausweis gültig bis** als Datumssensor.
+- **Ausleihen** mit Fälligkeit, Bibliothek, Titel, Autor, Signatur, Mediennummer und dem Hinweis aus dem Katalog (z. B. „verlängerbar“, „Heute verlängert“).
+- **Nächste Fälligkeit** mit den Titeln, die an diesem Tag fällig sind.
+- **Ein Verlängern-Button pro Ausleihe.** Die Buttons erscheinen und verschwinden mit den Ausleihen. Nicht verlängerbare Medien werden gar nicht erst an den Katalog geschickt, der Button zeigt stattdessen den Grund.
+- **Eigene Dashboard-Karte** mit Resttagen, Verlängern-Button und Auswahl zwischen mehreren Ausweisen.
+- Mehrere Ausweise (z. B. einer pro Familienmitglied), jeder als eigenes Gerät mit eigenem Namen.
+- Wenig Verkehr: Jede Aktualisierung ist eine kurze Katalog-Sitzung (Anmelden, Übersicht, Ausleihen, Abmelden), ohne Wiederholungen. Standardintervall 4 Stunden, einstellbar von 1 bis 48 Stunden.
 
 ## Installation
 
-1. HACS → three dots → **Custom repositories** → add `https://github.com/beatschubser/ha-muenchner-stadtbibliothek`, type **Integration**.
-2. Install **Münchner Stadtbibliothek** and restart Home Assistant.
-3. **Settings → Devices & services → Add integration → Münchner Stadtbibliothek**.
-4. Enter a name, card number and password (the same as for the online catalog).
+1. HACS → drei Punkte → **Benutzerdefinierte Repositories** → `https://github.com/beatschubser/ha-muenchner-stadtbibliothek` hinzufügen, Typ **Integration**.
+2. **Münchner Stadtbibliothek** installieren und Home Assistant neu starten.
+3. **Einstellungen → Geräte & Dienste → Integration hinzufügen → Münchner Stadtbibliothek**.
+4. Name, Ausweisnummer und Passwort eingeben (wie im Online-Katalog). Der Name erscheint als Gerätename und in der Karte, z. B. der Vorname des Ausweisinhabers.
 
-The update interval can be changed later under **Configure**.
+Das Aktualisierungsintervall lässt sich später unter **Konfigurieren** ändern. Weitere Ausweise fügst du über **Eintrag hinzufügen** hinzu.
 
-## Dashboard card
+## Dashboard-Karte
 
-The integration brings its own card and registers it as dashboard resource automatically (reload the browser once after installing or updating).
+Die Integration bringt ihre eigene Karte mit und trägt sie automatisch als Dashboard-Ressource ein (nach Installation oder Update den Browser einmal neu laden).
 
-**Edit dashboard → Add card → Münchner Stadtbibliothek.** All options can be set in the visual editor, the card size in the layout tab:
+**Dashboard bearbeiten → Karte hinzufügen → Münchner Stadtbibliothek.** Alle Optionen lassen sich im visuellen Editor einstellen, die Kartengröße im Layout-Tab:
 
-| Option | Default | |
+| Option | Standard | |
 | --- | --- | --- |
-| `account` | all | name of one library card (the name given during setup, or the renamed device name). Without it, all cards are shown as selection pills |
-| `title` | name of the library card | heading when only one library card is shown |
-| `show_card` | `true` | "card valid until" in the header |
-| `show_library` | `true` | library next to the author |
-| `max_width` | `640` | maximum width in px, centered (e.g. in pop-ups); `0` = full width |
-| `loan_days` | `28` | loan period in days, shown as a full ring |
-| `appearance` | `auto` | `auto` (theme), `light`, `dark` |
+| `account` | alle | Name eines Ausweises (wie bei der Einrichtung vergeben oder als Gerät umbenannt). Ohne Angabe erscheinen alle Ausweise als Auswahl-Pillen |
+| `title` | Name des Ausweises | Überschrift, wenn nur ein Ausweis angezeigt wird |
+| `show_card` | `true` | „Ausweis gültig bis“ in der Kopfzeile |
+| `show_library` | `true` | Bibliothek neben dem Autor |
+| `max_width` | `640` | maximale Breite in px, zentriert (z. B. in Pop-ups); `0` = volle Breite |
+| `loan_days` | `28` | Leihfrist in Tagen, entspricht dem vollen Ring |
+| `appearance` | `auto` | `auto` (Theme), `light`, `dark` |
 
 ```yaml
 type: custom:muenchner-stadtbibliothek-card
-account: Anna   # optional, the name given during setup
+account: Anna   # optional, der Name aus der Einrichtung
 ```
 
-With several library cards set up (one per family member, each with its own name), the card shows a pill per name at the top; tap one to switch. To show only one person, choose the name in the editor.
+Sind mehrere Ausweise eingerichtet, zeigt die Karte oben eine Pille pro Name; ein Tipp wechselt die Ansicht. Für nur eine Person den Namen im Editor auswählen.
 
-Each loan shows the remaining days as a ring (orange from 3 days, red when overdue), title, author, library and due date. Renewable items get a "Renew" button, items renewed today a green "Renewed today"; items that cannot be renewed have no button. In narrow columns the buttons become icons.
+Jede Ausleihe zeigt die Resttage als Ring (orange ab 3 Tagen, rot wenn überfällig), Titel, Autor, Bibliothek und Fälligkeit. Verlängerbare Medien haben einen Button „Verlängern“, heute verlängerte ein grünes „Heute verlängert“; nicht verlängerbare Medien haben keinen Button. Während einer Verlängerung und 5 Sekunden nach einem Fehler ist der Button gesperrt. In schmalen Spalten zeigen die Buttons nur Icons.
 
-## Entities
+## Entitäten
 
-| Entity (English / German name) | State | Attributes |
+| Entität (deutscher / englischer Name) | Zustand | Attribute |
 | --- | --- | --- |
-| Card valid until / Ausweis gültig bis | date | |
-| Loans / Ausleihen | number of loans | `loans` (list), `renewable`, `last_update` |
-| Next due date / Nächste Fälligkeit | date | `count`, `titles`, `renewable` |
-| Renew *title* / *Titel* verlängern (button) | | `barcode`, `title`, `author`, `full_title`, `signature`, `library`, `due_date`, `hint`, `renewable`, `renewed_today`, `renewals` |
+| Ausweis gültig bis / Card valid until | Datum | |
+| Ausleihen / Loans | Anzahl der Ausleihen | `loans` (Liste), `renewable`, `last_update` |
+| Nächste Fälligkeit / Next due date | Datum | `count`, `titles`, `renewable` |
+| *Titel* verlängern / Renew *title* (Button) | | `barcode`, `title`, `author`, `full_title`, `signature`, `library`, `due_date`, `hint`, `renewable`, `renewed_today`, `renewals` |
 
-Each item in the `loans` attribute has the same fields as the button attributes.
+Jeder Eintrag im Attribut `loans` hat dieselben Felder wie die Button-Attribute. Die Attributnamen sind englisch.
 
-## Examples
+## Beispiele
 
-Renew everything that is due within three days (checks once a day):
+Benachrichtigung aufs Smartphone, wenn Ausleihen in 7 bzw. 2 Tagen fällig sind, pro Ausweis und ohne Buchtitel:
+
+```yaml
+alias: Bibliothek - Fälligkeiten melden
+triggers:
+  - trigger: time
+    at: "09:00:00"
+variables:
+  notify_targets:
+    - notify.mobile_app_dein_handy
+  days_ahead:
+    - 7
+    - 2
+actions:
+  - repeat:
+      for_each: >
+        {{ expand(integration_entities('muenchner_stadtbibliothek') | select('match', 'sensor\\.') | list)
+           | selectattr('attributes.loans', 'defined')
+           | map(attribute='entity_id') | list }}
+      sequence:
+        - variables:
+            card_name: >
+              {% set dev = device_id(repeat.item) %}
+              {{ device_attr(dev, 'name_by_user') or device_attr(dev, 'name') }}
+            message: >
+              {% set loans = state_attr(repeat.item, 'loans') or [] %}
+              {% set parts = namespace(list=[]) %}
+              {% for n in days_ahead | sort %}
+                {% set due = (now().date() + timedelta(days=n)) | string %}
+                {% set count = loans | selectattr('due_date', 'eq', due) | list | count %}
+                {% if count > 0 %}
+                  {% set parts.list = parts.list + [count ~ (' Medium' if count == 1 else ' Medien') ~ ' in ' ~ n ~ ' Tagen fällig'] %}
+                {% endif %}
+              {% endfor %}
+              {{ parts.list | join(', ') }}
+        - condition: template
+          value_template: "{{ message | length > 0 }}"
+        - repeat:
+            for_each: "{{ notify_targets }}"
+            sequence:
+              - action: "{{ repeat.item }}"
+                data:
+                  title: Bibliothek
+                  message: "Ausweis {{ card_name }}: {{ message }}."
+mode: single
+```
+
+Alles verlängern, was in den nächsten drei Tagen fällig ist (einmal täglich):
 
 ```yaml
 triggers:
@@ -97,18 +145,8 @@ actions:
       entity_id: "{{ due }}"
 ```
 
-Loans as a list on a dashboard (Markdown card; replace the entity ID with yours):
+## So funktioniert es
 
-```yaml
-type: markdown
-content: >
-  {% for loan in state_attr('sensor.munchner_stadtbibliothek_ausleihen', 'loans') %}
-  **{{ loan.title }}** · {{ as_timestamp(loan.due_date) | timestamp_custom('%d.%m.') }} · {{ loan.hint }}
-  {% endfor %}
-```
+Der Katalog läuft mit aDIS/BMS. Die Integration verhält sich wie ein Nutzer im Browser: Sie meldet sich über das normale Login-Formular an, öffnet die Kontoübersicht und die Ausleihen und meldet sich wieder ab. Zum Verlängern setzt sie genau ein Häkchen und klickt einmal auf „Markierte Medien verlängern“; der neue Stand kommt direkt aus der Antwortseite. Jede Seite hat 10 Sekunden Zeit, es gibt keine automatischen Wiederholungen.
 
-## How it works
-
-The catalog runs aDIS/BMS. The integration logs in through the catalog's normal login form, opens the account overview and the loans page and logs out again. Renewing marks the item and presses "Markierte Medien verlängern", exactly like in the browser; the answer of the catalog is shown right away.
-
-Card number and password are stored in the Home Assistant config entry and only sent to `ssl.muenchen.de`.
+Ausweisnummer und Passwort liegen im Konfigurationseintrag von Home Assistant und werden nur an `ssl.muenchen.de` gesendet.
