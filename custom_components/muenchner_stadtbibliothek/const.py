@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "muenchner_stadtbibliothek"
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 
 # Library catalog (aDIS/BMS by aStec). Changeable in case the library moves the catalog.
 DEFAULT_BASE_URL = "https://ssl.muenchen.de"
@@ -21,6 +21,7 @@ LINK_ACCOUNT = "Mein Konto"
 LINK_LOGOUT = "Sitzung beenden"
 LINK_LOANS_PATTERN = r"^\s*(\d+)\s+Ausleihe(n)?\s*$"
 BUTTON_LOGIN = "Anmelden"
+BUTTON_LOGIN_NAME = "LLOGIN"  # the label is "Login" when the page is served in English
 BUTTON_RENEW_MARKED = "Markierte Medien verlängern"
 TERM_CARD_VALID = "Ausweis gültig bis"
 COLUMN_DUE = "Fällig am"

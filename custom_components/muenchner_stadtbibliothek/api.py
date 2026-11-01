@@ -16,6 +16,7 @@ import aiohttp
 
 from .const import (
     BUTTON_LOGIN,
+    BUTTON_LOGIN_NAME,
     BUTTON_RENEW_MARKED,
     DEFAULT_BASE_URL,
     LINK_ACCOUNT,
@@ -159,7 +160,7 @@ class LibraryClient:
 
         if is_login_page(html):
             form = parse_login_form(html, page.url)
-            button = login_submit_button(html, BUTTON_LOGIN)
+            button = login_submit_button(html, BUTTON_LOGIN_NAME, BUTTON_LOGIN)
             if form is None or button is None:
                 raise LibraryParseError("login form not recognized")
             action, fields, user_field, password_field = form
