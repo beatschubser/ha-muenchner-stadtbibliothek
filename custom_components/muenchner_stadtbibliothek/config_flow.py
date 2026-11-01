@@ -35,20 +35,21 @@ DEFAULT_NAME = "Münchner Stadtbibliothek"
 PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 
 
-async def _validate(hass, card_number: str, password: str) -> str | None:
-    """Try one login; returns an error key or None."""
+async def _validate(hass, card_number: str, password: str) -> tuple[str | None, str]:
+    """Try one login; returns an error key (or None) and details for the message."""
     from . import create_client  # avoids a circular import
 
     try:
         await create_client(hass, card_number, password).async_fetch()
     except LibraryAuthError:
-        return "invalid_auth"
-    except LibraryConnectionError:
-        return "cannot_connect"
-    except LibraryError:
+        return "invalid_auth", ""
+    except LibraryConnectionError as err:
+        _LOGGER.warning("Catalog not reachable: %s", err)
+        return "cannot_connect", str(err)
+    except LibraryError as err:
         _LOGGER.exception("Unexpected catalog page")
-        return "unknown_page"
-    return None
+        return "unknown_page", str(err)
+    return None, ""
 
 
 class LibraryConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -58,11 +59,12 @@ class LibraryConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
+        details = ""
         if user_input is not None:
             card = user_input[CONF_CARD_NUMBER].replace(" ", "")
             await self.async_set_unique_id(card)
             self._abort_if_unique_id_configured()
-            error = await _validate(self.hass, card, user_input[CONF_PASSWORD])
+            error, details = await _validate(self.hass, card, user_input[CONF_PASSWORD])
             if error is None:
                 return self.async_create_entry(
                     title=user_input[CONF_NAME].strip() or DEFAULT_NAME,
@@ -80,6 +82,7 @@ class LibraryConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=self.add_suggested_values_to_schema(schema, user_input or {}),
+            description_placeholders={"details": details or "-"},
             errors=errors,
         )
 
@@ -89,8 +92,9 @@ class LibraryConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
+        details = ""
         if user_input is not None:
-            error = await _validate(self.hass, entry.data[CONF_CARD_NUMBER], user_input[CONF_PASSWORD])
+            error, details = await _validate(self.hass, entry.data[CONF_CARD_NUMBER], user_input[CONF_PASSWORD])
             if error is None:
                 return self.async_update_reload_and_abort(
                     entry, data_updates={CONF_PASSWORD: user_input[CONF_PASSWORD]}
@@ -99,7 +103,7 @@ class LibraryConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reauth_confirm",
             data_schema=vol.Schema({vol.Required(CONF_PASSWORD): PASSWORD_SELECTOR}),
-            description_placeholders={"name": entry.title},
+            description_placeholders={"name": entry.title, "details": details or "-"},
             errors=errors,
         )
 

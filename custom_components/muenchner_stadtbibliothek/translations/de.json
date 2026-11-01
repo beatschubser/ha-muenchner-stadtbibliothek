@@ -23,8 +23,8 @@
     },
     "error": {
       "invalid_auth": "Ausweisnummer oder Passwort ist falsch.",
-      "cannot_connect": "Der Katalog ist nicht erreichbar. Bitte später erneut versuchen.",
-      "unknown_page": "Der Katalog hat mit einer unerwarteten Seite geantwortet. Details stehen im Log."
+      "cannot_connect": "Der Katalog ist nicht erreichbar ({details}).",
+      "unknown_page": "Der Katalog hat mit einer unerwarteten Seite geantwortet ({details})."
     },
     "abort": {
       "already_configured": "Dieser Ausweis ist bereits eingerichtet.",
@@ -44,34 +44,60 @@
   },
   "entity": {
     "sensor": {
-      "card_valid_until": { "name": "Ausweis gültig bis" },
+      "card_valid_until": {
+        "name": "Ausweis gültig bis"
+      },
       "loans": {
         "name": "Ausleihen",
         "unit_of_measurement": "Medien",
         "state_attributes": {
-          "loans": { "name": "Ausleihen" },
-          "renewable": { "name": "Verlängerbar" },
-          "last_update": { "name": "Letzte Aktualisierung" }
+          "loans": {
+            "name": "Ausleihen"
+          },
+          "renewable": {
+            "name": "Verlängerbar"
+          },
+          "last_update": {
+            "name": "Letzte Aktualisierung"
+          }
         }
       },
       "next_due_date": {
         "name": "Nächste Fälligkeit",
         "state_attributes": {
-          "count": { "name": "Medien" },
-          "titles": { "name": "Titel" },
-          "renewable": { "name": "Alle verlängerbar" }
+          "count": {
+            "name": "Medien"
+          },
+          "titles": {
+            "name": "Titel"
+          },
+          "renewable": {
+            "name": "Alle verlängerbar"
+          }
         }
       }
     },
     "button": {
-      "renew": { "name": "{title} verlängern" }
+      "renew": {
+        "name": "{title} verlängern"
+      }
     }
   },
   "exceptions": {
-    "renew_failed": { "message": "Verlängerung nicht möglich: {reason}" },
-    "not_renewable": { "message": "„{title}“ kann nicht verlängert werden: {hint}" },
-    "loan_gone": { "message": "Dieses Medium ist nicht mehr auf dem Ausweis." },
-    "auth_failed": { "message": "Der Katalog hat die Anmeldung abgelehnt. Bitte das Passwort erneut eingeben." },
-    "connection_failed": { "message": "Der Katalog ist nicht erreichbar: {reason}" }
+    "renew_failed": {
+      "message": "Verlängerung nicht möglich: {reason}"
+    },
+    "not_renewable": {
+      "message": "„{title}“ kann nicht verlängert werden: {hint}"
+    },
+    "loan_gone": {
+      "message": "Dieses Medium ist nicht mehr auf dem Ausweis."
+    },
+    "auth_failed": {
+      "message": "Der Katalog hat die Anmeldung abgelehnt. Bitte das Passwort erneut eingeben."
+    },
+    "connection_failed": {
+      "message": "Der Katalog ist nicht erreichbar: {reason}"
+    }
   }
 }
