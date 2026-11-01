@@ -98,6 +98,9 @@
     },
     "connection_failed": {
       "message": "Der Katalog ist nicht erreichbar: {reason}"
+    },
+    "renew_running": {
+      "message": "Die Verlängerung dieses Mediums läuft bereits."
     }
   }
 }
