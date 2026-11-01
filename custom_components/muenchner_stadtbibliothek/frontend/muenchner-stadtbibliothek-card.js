@@ -8,16 +8,19 @@
  *   show_card   show "card valid until" in the header (default: true)
  *   show_library  show the library next to the author (default: true)
  *   max_width   maximum width in px, centered (default: 640, 0 = full width)
+ *   card_warn_days  warn this many days before the card expires (default: 30; red from 7 days)
  *   loan_days   loan period in days, full ring (default: 28)
  *   appearance  auto | light | dark (default: auto = theme)
  */
 
-const VERSION = "0.3.6";
+const VERSION = "0.4.0";
 const DOMAIN = "muenchner_stadtbibliothek";
 const CARD_TYPE = "muenchner-stadtbibliothek-card";
 const DEFAULT_LOAN_DAYS = 28;
 const DEFAULT_MAX_WIDTH = 640; // px; the card stays readable in wide pop-ups and panels (0 = no limit)
 const SOON_DAYS = 3; // remaining days shown in the warning color
+const DEFAULT_CARD_WARN_DAYS = 30; // card validity shown in the warning color from here
+const CARD_ALERT_DAYS = 7; // red, plus a banner above the loans
 const FAILED_LOCK_MS = 5000; // a failed renewal keeps its button locked this long
 const APPEARANCES = ["auto", "light", "dark"];
 const ALL = "__all__"; // editor value for "all accounts as pills"
@@ -25,6 +28,15 @@ const ALL = "__all__"; // editor value for "all accounts as pills"
 const TEXTS = {
   de: {
     card_valid: "Ausweis gültig bis {date}",
+    card_left: "noch {n} Tage",
+    card_left_one: "noch 1 Tag",
+    card_left_today: "läuft heute ab",
+    card_expired: "Ausweis abgelaufen seit {date}",
+    card_alert: "Der Ausweis läuft in {n} Tagen ab.",
+    card_alert_one: "Der Ausweis läuft morgen ab.",
+    card_alert_today: "Der Ausweis läuft heute ab.",
+    card_alert_expired: "Der Ausweis ist abgelaufen.",
+    card_warning: "Ausweis läuft bald ab",
     due: "fällig {date}",
     overdue: "überfällig seit {date}",
     days_left: "noch {n} Tage",
@@ -45,6 +57,7 @@ const TEXTS = {
     editor_title: "Titel (leer = Name des Ausweises)",
     editor_show_card: "Ausweis-Gültigkeit anzeigen",
     editor_show_library: "Bibliothek anzeigen",
+    editor_card_warn_days: "Warnung vor Ablauf des Ausweises (Tage)",
     editor_max_width: "Maximale Breite (px, 0 = volle Breite)",
     editor_loan_days: "Leihfrist (Tage, voller Ring)",
     editor_appearance: "Darstellung",
@@ -54,6 +67,15 @@ const TEXTS = {
   },
   en: {
     card_valid: "Card valid until {date}",
+    card_left: "{n} days left",
+    card_left_one: "1 day left",
+    card_left_today: "expires today",
+    card_expired: "Card expired on {date}",
+    card_alert: "The library card expires in {n} days.",
+    card_alert_one: "The library card expires tomorrow.",
+    card_alert_today: "The library card expires today.",
+    card_alert_expired: "The library card has expired.",
+    card_warning: "Card expires soon",
     due: "due {date}",
     overdue: "overdue since {date}",
     days_left: "{n} days left",
@@ -74,6 +96,7 @@ const TEXTS = {
     editor_title: "Title (empty = name of the card)",
     editor_show_card: "Show card validity",
     editor_show_library: "Show library",
+    editor_card_warn_days: "Warn before the card expires (days)",
     editor_max_width: "Maximum width (px, 0 = full width)",
     editor_loan_days: "Loan period (days, full ring)",
     editor_appearance: "Appearance",
@@ -273,18 +296,27 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     const account = accounts.find((a) => a.id === this._active) || accounts[0];
     this._active = account.id;
 
-    const validity = account.validity ? hass.states[account.validity] : null;
-    const validDate = validity && parseDate(validity.state);
-    const valid =
-      this._config.show_card !== false && validDate
-        ? `<div class="valid">${esc(t(hass, "card_valid", { date: formatDate(hass, validDate, true) }))}</div>`
-        : "";
+    const card = this._cardStatus(account);
+    // the validity is always shown while a warning is due, even with show_card off
+    let valid = "";
+    if (card && (this._config.show_card !== false || card.level !== "ok")) {
+      const date = formatDate(hass, card.date, true);
+      const left = card.days === 0 ? t(hass, "card_left_today") : card.days === 1 ? t(hass, "card_left_one") : t(hass, "card_left", { n: card.days });
+      const text = card.level === "expired" ? t(hass, "card_expired", { date }) : card.level === "ok" ? t(hass, "card_valid", { date }) : `${t(hass, "card_valid", { date })} · ${left}`;
+      valid = `<div class="valid ${card.level}">${esc(text)}</div>`;
+    }
+    let banner = "";
+    if (card && (card.level === "alert" || card.level === "expired")) {
+      const text =
+        card.level === "expired" ? t(hass, "card_alert_expired") : card.days === 0 ? t(hass, "card_alert_today") : card.days === 1 ? t(hass, "card_alert_one") : t(hass, "card_alert", { n: card.days });
+      banner = `<div class="banner" role="alert">${esc(text)}</div>`;
+    }
     let head;
     if (accounts.length > 1) {
       const pills = accounts
         .map(
           (a) =>
-            `<button type="button" class="tab ${a.id === account.id ? "active" : ""}" data-tab="${esc(a.id)}" aria-pressed="${a.id === account.id}">${esc(a.name)}</button>`
+            `<button type="button" class="tab ${a.id === account.id ? "active" : ""}" data-tab="${esc(a.id)}" aria-pressed="${a.id === account.id}">${esc(a.name)}${this._pillDot(a)}</button>`
         )
         .join("");
       head = `<div class="head"><div class="tabs">${pills}</div>${valid}</div>`;
@@ -303,7 +335,25 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
       body = `<div class="list">${loans.map((loan) => this._row(loan, account.buttons[loan.barcode])).join("")}</div>`;
     }
     this._size = 1 + Math.max(1, Math.ceil((loans?.length || 1) * 1.6));
-    this._card.innerHTML = head + body;
+    this._card.innerHTML = head + banner + body;
+  }
+
+  /** Validity of an account's library card: date, remaining days and warning level. */
+  _cardStatus(account) {
+    const state = account.validity ? this._hass.states[account.validity] : null;
+    const date = state && parseDate(state.state);
+    if (!date) return null;
+    const days = daysUntil(date);
+    const warn = Number(this._config.card_warn_days ?? DEFAULT_CARD_WARN_DAYS);
+    const level = days < 0 ? "expired" : days <= CARD_ALERT_DAYS ? "alert" : days <= warn ? "warn" : "ok";
+    return { date, days, level };
+  }
+
+  /** Small dot on a pill whose library card expires soon (it may not be the one shown). */
+  _pillDot(account) {
+    const card = this._cardStatus(account);
+    if (!card || card.level === "ok") return "";
+    return `<span class="dot ${card.level}" role="img" aria-label="${esc(t(this._hass, "card_warning"))}"></span>`;
   }
 
   _row(loan, buttonId) {
@@ -386,12 +436,20 @@ ha-card.mode-dark { color-scheme:dark; --primary-text-color:#e1e1e1; --secondary
 ha-card { display:block; box-sizing:border-box; margin:0 auto; padding:16px; color:var(--primary-text-color); container-type:inline-size; }
 .head { display:flex; align-items:baseline; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
 .title { font-size:1.25em; font-weight:500; flex:1; min-width:0; }
-.tabs { display:flex; gap:6px; flex:1; flex-wrap:wrap; min-width:0; }
+.tabs { display:flex; gap:6px; flex:1 0 auto; flex-wrap:wrap; max-width:100%; }
 .tab { font:inherit; font-size:.95em; min-height:36px; border:1px solid var(--divider-color, rgba(127,127,127,.3)); background:none; color:var(--primary-text-color); border-radius:18px; padding:6px 14px; cursor:pointer; }
 .tab.active { background:var(--primary-color); border-color:var(--primary-color); color:var(--text-primary-color, #fff); }
 .tab:focus-visible { outline:2px solid var(--primary-color); outline-offset:2px; }
 .head { align-items:center; }
-.valid { font-size:.85em; color:var(--secondary-text-color); }
+.valid { font-size:.85em; color:var(--secondary-text-color); margin-left:auto; text-align:right; }
+.valid.warn { color:var(--warning-color, #ff9800); font-weight:500; }
+.valid.alert, .valid.expired { color:var(--error-color, #db4437); font-weight:500; }
+.banner { margin:0 0 10px; padding:10px 12px; border-radius:10px; font-size:.9em; font-weight:500;
+          background:color-mix(in srgb, var(--error-color, #db4437) 16%, transparent); color:var(--error-color, #db4437); }
+.tab { display:inline-flex; align-items:center; gap:6px; }
+.dot { width:8px; height:8px; border-radius:4px; flex-shrink:0; background:var(--warning-color, #ff9800); }
+.dot.alert, .dot.expired { background:var(--error-color, #db4437); }
+.tab.active .dot { box-shadow:0 0 0 2px var(--text-primary-color, #fff); }
 .list { display:flex; flex-direction:column; gap:8px; }
 .row { display:flex; align-items:center; gap:14px; padding:12px; border-radius:12px; border:1px solid transparent;
        background:var(--lib-tile, color-mix(in srgb, var(--primary-text-color) 5%, var(--card-background-color, var(--ha-card-background, #fff)))); }
@@ -470,6 +528,7 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
         schema: [
           { name: "loan_days", selector: { number: { min: 7, max: 60, step: 1, mode: "box", unit_of_measurement: "d" } } },
           { name: "max_width", selector: { number: { min: 0, max: 2000, step: 10, mode: "box", unit_of_measurement: "px" } } },
+          { name: "card_warn_days", selector: { number: { min: 0, max: 120, step: 1, mode: "box", unit_of_measurement: "d" } } },
           {
             name: "appearance",
             selector: { select: { mode: "dropdown", options: APPEARANCES.map((value) => ({ value, label: t(hass, `appearance_${value}`) })) } },
@@ -503,6 +562,7 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
       title: this._config.title ?? "",
       loan_days: this._config.loan_days ?? DEFAULT_LOAN_DAYS,
       max_width: this._config.max_width ?? DEFAULT_MAX_WIDTH,
+      card_warn_days: this._config.card_warn_days ?? DEFAULT_CARD_WARN_DAYS,
       appearance: this._config.appearance || "auto",
       show_card: this._config.show_card !== false,
       show_library: this._config.show_library !== false,
@@ -521,6 +581,9 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
     else delete config.loan_days;
     if (value.max_width !== undefined && value.max_width !== "" && Number(value.max_width) !== DEFAULT_MAX_WIDTH) config.max_width = Number(value.max_width);
     else delete config.max_width;
+    if (value.card_warn_days !== undefined && value.card_warn_days !== "" && Number(value.card_warn_days) !== DEFAULT_CARD_WARN_DAYS)
+      config.card_warn_days = Number(value.card_warn_days);
+    else delete config.card_warn_days;
     if (value.appearance && value.appearance !== "auto") config.appearance = value.appearance;
     else delete config.appearance;
     if (value.show_card === false) config.show_card = false;
