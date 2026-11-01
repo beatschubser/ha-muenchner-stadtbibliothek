@@ -92,6 +92,13 @@ def test_overview_without_loans():
     assert parser.loans_link(page) == (None, 0)
 
 
+def test_login_button_english_page():
+    html = """<form action="logincheck"><input type="text" name="L#AUSW"><input type="password" name="LPASSW">
+<input type="submit" name="LLOGIN" value="Login"><input type="submit" name="LCANCL" value="Cancel"></form>"""
+    assert parser.login_submit_button(html, "LLOGIN", "Anmelden") == ("LLOGIN", "Login")
+    assert parser.login_submit_button(html, "XLOGIN", "Login") == ("LLOGIN", "Login")
+
+
 # ---- client ------------------------------------------------------------------
 
 

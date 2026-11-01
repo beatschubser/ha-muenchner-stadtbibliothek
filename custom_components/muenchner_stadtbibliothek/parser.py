@@ -167,12 +167,16 @@ def parse_login_form(html: str, url: str) -> tuple[str, dict[str, str], str, str
     return urljoin(url, form.get("action") or url), fields, user_field, password["name"]
 
 
-def login_submit_button(html: str, label: str) -> tuple[str, str] | None:
-    """Name and value of the login button."""
+def login_submit_button(html: str, name: str, label: str) -> tuple[str, str] | None:
+    """Name and value of the login button, by field name first (the label depends on the language)."""
     soup = BeautifulSoup(html, "html.parser")
-    for inp in soup.find_all("input", attrs={"type": "submit"}):
-        if (inp.get("value") or "").strip() == label and inp.get("name"):
-            return inp["name"], inp["value"]
+    buttons = [b for b in soup.find_all("input", attrs={"type": "submit"}) if b.get("name")]
+    for button in buttons:
+        if button["name"] == name:
+            return button["name"], button.get("value", "")
+    for button in buttons:
+        if (button.get("value") or "").strip() == label:
+            return button["name"], button["value"]
     return None
 
 
