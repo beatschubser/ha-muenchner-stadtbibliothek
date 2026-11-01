@@ -12,7 +12,7 @@
  *   appearance  auto | light | dark (default: auto = theme)
  */
 
-const VERSION = "0.3.5";
+const VERSION = "0.3.6";
 const DOMAIN = "muenchner_stadtbibliothek";
 const CARD_TYPE = "muenchner-stadtbibliothek-card";
 const DEFAULT_LOAN_DAYS = 28;
@@ -24,7 +24,7 @@ const ALL = "__all__"; // editor value for "all accounts as pills"
 
 const TEXTS = {
   de: {
-    card_valid: "Ausweis bis {date}",
+    card_valid: "Ausweis gültig bis {date}",
     due: "fällig {date}",
     overdue: "überfällig seit {date}",
     days_left: "noch {n} Tage",
