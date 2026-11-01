@@ -87,6 +87,13 @@ async def test_sensors_and_buttons(hass: HomeAssistant, fake) -> None:
     assert loans.attributes["renewable"] == 2
     assert loans.attributes["card_valid_until"] == "2030-12-31"
     assert loans.attributes["loans"][0]["title"] == "Der kleine Testdrache"
+    # cover lookup: unique hit for the first item, none for the others; every item searched once
+    assert loans.attributes["loans"][0]["cover_url"] == "https://ssl.muenchen.de/vlb/cover/9783000000002/m"
+    assert loans.attributes["loans"][1]["cover_url"] is None
+    assert len(fake.searches) == 3
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert len(fake.searches) == 3, "known items are not searched again"
 
     buttons = _button_ids(hass, entry)
     assert len(buttons) == 3
@@ -137,6 +144,20 @@ async def test_card_is_served(hass: HomeAssistant, hass_client, fake) -> None:
     assert "muenchner-stadtbibliothek-card" in await response.text()
     response = await client.get("/muenchner_stadtbibliothek_files/manifest.json")
     assert response.status == 404
+
+
+async def test_cover_lookup_can_be_switched_off(hass: HomeAssistant, fake) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Testausweis",
+        unique_id=CARD,
+        data={CONF_CARD_NUMBER: CARD, CONF_PASSWORD: PASSWORD},
+        options={"lookup_covers": False},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert fake.searches == []
 
 
 async def test_wrong_password_starts_reauth(hass: HomeAssistant, fake) -> None:

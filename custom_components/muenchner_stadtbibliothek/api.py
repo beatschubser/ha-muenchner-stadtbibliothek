@@ -15,13 +15,20 @@ from datetime import date, datetime
 import aiohttp
 
 from .const import (
+    BUTTON_ADVANCED_SEARCH,
     BUTTON_LOGIN,
     BUTTON_LOGIN_NAME,
     BUTTON_RENEW_MARKED,
+    BUTTON_SEARCH,
+    BUTTON_TO_OVERVIEW,
     DEFAULT_BASE_URL,
     LINK_ACCOUNT,
     LINK_LOGOUT,
+    MAX_LOOKUPS_PER_UPDATE,
     REQUEST_TIMEOUT,
+    SEARCH_FIELD_SIGNATURE,
+    SEARCH_FIELD_TITLE,
+    SEARCH_OPERATOR_AND,
     START_PATH,
     USER_AGENT,
 )
@@ -36,9 +43,11 @@ from .parser import (
     login_submit_button,
     page_message,
     parse_card_valid_until,
+    parse_isbn,
     parse_loans,
     parse_login_form,
     parse_page,
+    parse_search_form,
     renewed_today,
 )
 
@@ -76,6 +85,8 @@ class AccountData:
     card_valid_until: date | None
     loans: list[Loan] = field(default_factory=list)
     updated: datetime = field(default_factory=datetime.now)
+    # catalog searches done in this update: barcode -> ISBN, or None when no unique record was found
+    looked_up: dict[str, str | None] = field(default_factory=dict)
 
 
 @dataclass
@@ -194,17 +205,65 @@ class LibraryClient:
 
     # ---- public -----------------------------------------------------------
 
-    async def async_fetch(self) -> AccountData:
-        """Card validity and current loans."""
+    async def _lookup_isbns(self, page: AdisPage, loans: list[Loan]) -> tuple[AdisPage, dict[str, str | None]]:
+        """Search the catalog once per item like a user would (title + shelf mark + library).
+
+        Only a unique hit opens the full record directly; its ISBN is taken. Anything else
+        (no hit, a result list, a changed page) gives None. Errors stop the lookups but never
+        the update. Returns the last page (for the logout) and the results.
+        """
+        results: dict[str, str | None] = {}
+        try:
+            if BUTTON_ADVANCED_SEARCH not in page.buttons and BUTTON_TO_OVERVIEW in page.buttons:
+                page, _ = await self._click_button(page, BUTTON_TO_OVERVIEW)
+            for loan in loans[:MAX_LOOKUPS_PER_UPDATE]:
+                if BUTTON_ADVANCED_SEARCH not in page.buttons:
+                    break
+                page, _ = await self._click_button(page, BUTTON_ADVANCED_SEARCH)
+                form = parse_search_form(page, (SEARCH_FIELD_TITLE, SEARCH_FIELD_SIGNATURE), SEARCH_OPERATOR_AND, BUTTON_SEARCH)
+                if form is None or not page.action:
+                    _LOGGER.debug("Advanced search form not recognized")
+                    break
+                values = dict(form.fields)
+                values.update(page.hidden)
+                values.update(scriptEnabled="true", scrollPos="0", keyCode="0", source="$B", selected="", focus=form.submit[2] or "")
+                values[form.library] = loan.library
+                (field1, input1), (field2, input2) = form.rows[0], form.rows[1]
+                values.update({field1: SEARCH_FIELD_TITLE, input1: loan.title, form.operators[0]: SEARCH_OPERATOR_AND})
+                if loan.signature:
+                    values.update({field2: SEARCH_FIELD_SIGNATURE, input2: loan.signature})
+                name, label, _ = form.submit
+                data = [*values.items(), (name, label), (name, "pressed")]
+                page, _ = await self._load("POST", page.action, data)
+                results[loan.barcode] = parse_isbn(page)
+                _LOGGER.debug("Cover lookup for %s: %s", loan.barcode, results[loan.barcode] or "no unique record")
+        except LibraryError as err:
+            _LOGGER.debug("Cover lookup stopped: %s", err)
+        return page, results
+
+    async def async_fetch(self, known_isbns: dict[str, str | None] | None = None) -> AccountData:
+        """Card validity and current loans.
+
+        known_isbns: results of earlier lookups (barcode -> ISBN or None). None disables lookups;
+        otherwise items not in it are searched in the catalog once.
+        """
         async with self._lock:
             overview = await self._login()
             last = overview
             try:
                 valid = parse_card_valid_until(overview)
                 loans_page = await self._open_loans(overview)
+                loans = parse_loans(loans_page) if loans_page else []
                 if loans_page is not None:
                     last = loans_page
-                return AccountData(valid, parse_loans(loans_page) if loans_page else [])
+                looked_up: dict[str, str | None] = {}
+                if known_isbns is not None:
+                    new = [loan for loan in loans if loan.barcode not in known_isbns]
+                    if new:
+                        last, looked_up = await self._lookup_isbns(last, new)
+                    for loan in loans:
+                        loan.isbn = looked_up.get(loan.barcode) or known_isbns.get(loan.barcode)
+                return AccountData(valid, loans, looked_up=looked_up)
             finally:
                 await self._logout(last)
 

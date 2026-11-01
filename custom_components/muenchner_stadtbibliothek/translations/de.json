@@ -34,10 +34,14 @@
   "options": {
     "step": {
       "init": {
-        "title": "Aktualisierungsintervall",
+        "title": "Optionen",
         "description": "Bei jeder Aktualisierung meldet sich die Integration einmal am Katalog an und wieder ab. Fälligkeiten ändern sich selten, ein paar Stunden reichen.",
         "data": {
-          "scan_interval_hours": "Aktualisieren alle"
+          "scan_interval_hours": "Aktualisieren alle",
+          "lookup_covers": "Cover nachschlagen"
+        },
+        "data_description": {
+          "lookup_covers": "Sucht jedes neue Medium einmal im Katalog (Titel, Signatur, Bibliothek) und merkt sich die ISBN für das Cover. Pro neuem Medium zwei zusätzliche Seitenaufrufe."
         }
       }
     }

@@ -8,6 +8,7 @@ from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import (
@@ -17,7 +18,15 @@ from .api import (
     LibraryError,
     LibraryRenewError,
 )
-from .const import CONF_SCAN_INTERVAL_HOURS, DEFAULT_SCAN_INTERVAL_HOURS, DOMAIN
+from .const import (
+    CONF_LOOKUP_COVERS,
+    CONF_SCAN_INTERVAL_HOURS,
+    DEFAULT_LOOKUP_COVERS,
+    DEFAULT_SCAN_INTERVAL_HOURS,
+    DOMAIN,
+)
+
+STORAGE_VERSION = 1
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,14 +49,36 @@ class LibraryCoordinator(DataUpdateCoordinator[AccountData]):
         )
         self.client = client
         self._renewing: set[str] = set()  # barcodes with a renewal in progress
+        self._lookup_covers = entry.options.get(CONF_LOOKUP_COVERS, DEFAULT_LOOKUP_COVERS)
+        # barcode -> ISBN (or None: searched, no unique record); kept across restarts so every item is searched once
+        self._isbn_store: Store[dict[str, str | None]] = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.isbn")
+        self._isbns: dict[str, str | None] = {}
+
+    async def async_load_isbns(self) -> None:
+        """Load the stored lookup results (before the first update)."""
+        self._isbns = await self._isbn_store.async_load() or {}
 
     async def _async_update_data(self) -> AccountData:
         try:
-            return await self.client.async_fetch()
+            account = await self.client.async_fetch(self._isbns if self._lookup_covers else None)
         except LibraryAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except LibraryError as err:
             raise UpdateFailed(str(err)) from err
+        # keep results only for current loans; returned items are searched again if borrowed again
+        current = {loan.barcode for loan in account.loans}
+        isbns = {code: isbn for code, isbn in {**self._isbns, **account.looked_up}.items() if code in current}
+        if isbns != self._isbns:
+            self._isbns = isbns
+            self._isbn_store.async_delay_save(lambda: self._isbns, 5)
+        self._apply_isbns(account)
+        return account
+
+    def _apply_isbns(self, account: AccountData) -> None:
+        if not self._lookup_covers:
+            return
+        for loan in account.loans:
+            loan.isbn = loan.isbn or self._isbns.get(loan.barcode)
 
     async def async_renew(self, barcode: str) -> None:
         """Renew one loan once; a second press while it runs (any card, any device) is rejected."""
@@ -71,6 +102,7 @@ class LibraryCoordinator(DataUpdateCoordinator[AccountData]):
         except LibraryRenewError as err:
             if err.account is not None:
                 self._keep_card_validity(err.account)
+                self._apply_isbns(err.account)
                 self.async_set_updated_data(err.account)
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
@@ -84,6 +116,7 @@ class LibraryCoordinator(DataUpdateCoordinator[AccountData]):
                 translation_placeholders={"reason": str(err)},
             ) from err
         self._keep_card_validity(result.account)
+        self._apply_isbns(result.account)
         self.async_set_updated_data(result.account)
 
     def _keep_card_validity(self, account: AccountData) -> None:

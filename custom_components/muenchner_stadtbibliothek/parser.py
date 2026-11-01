@@ -15,6 +15,7 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup, Tag
 
 from .const import (
+    COVER_URL,
     COLUMN_DUE,
     COLUMN_HINT,
     COLUMN_LIBRARY,
@@ -49,6 +50,7 @@ class Loan:
     renewable: bool
     renewals: int | None
     checkbox: str | None = None  # value of the row checkbox, only valid for the page it came from
+    isbn: str | None = None  # ISBN-13/EAN from the catalog record, looked up once per item
 
     def as_dict(self) -> dict:
         """Attributes for Home Assistant (dates as ISO strings, no page specific data)."""
@@ -56,6 +58,7 @@ class Loan:
         data.pop("checkbox")
         data["due_date"] = self.due_date.isoformat() if self.due_date else None
         data["renewed_today"] = renewed_today(self)
+        data["cover_url"] = COVER_URL.format(isbn=self.isbn) if self.isbn else None
         return data
 
 
@@ -68,6 +71,7 @@ class AdisPage:
     hidden: dict[str, str] = field(default_factory=dict)
     links: dict[str, str] = field(default_factory=dict)  # link text -> link code
     buttons: dict[str, tuple[str, str | None]] = field(default_factory=dict)  # value -> (name, data-fld)
+    submits: list[tuple[str, str, str | None]] = field(default_factory=list)  # all (name, value, data-fld) in order
     soup: BeautifulSoup | None = None
 
 
@@ -107,6 +111,7 @@ def parse_page(html: str, url: str) -> AdisPage:
         if inp.get("name") and inp.get("value"):
             # the same button can appear twice (above and below a table); keep the first
             page.buttons.setdefault(inp["value"].strip(), (inp["name"], inp.get("data-fld")))
+            page.submits.append((inp["name"], inp["value"].strip(), inp.get("data-fld")))
 
     scripts = "\n".join(s.get_text() for s in soup.find_all("script") if not s.get("src"))
     codes = dict(_FN_RE.findall(scripts))  # fn name -> code
@@ -269,3 +274,85 @@ def parse_loans(page: AdisPage) -> list[Loan]:
 def renewed_today(loan: Loan) -> bool:
     """True if the catalog reports the loan as renewed today."""
     return loan.hint.startswith(HINT_RENEWED_TODAY)
+
+
+# ---- catalog search (cover lookup) ------------------------------------------------
+
+
+@dataclass
+class SearchForm:
+    """Field names of the advanced search form ("Erweiterte Suche")."""
+
+    fields: list[tuple[str, str]]  # every field of the form with its current value, in order
+    library: str  # select with the libraries
+    rows: list[tuple[str, str]]  # (field select, text input) per search row, in order
+    operators: list[str]  # selects between the rows (UND/ODER/NICHT)
+    submit: tuple[str, str, str | None]  # the search button of the form (not the one in the header)
+
+
+def parse_search_form(page: AdisPage, field_options: tuple[str, ...], operator: str, submit_label: str) -> SearchForm | None:
+    """Find library select, search rows and operators by their options, independent of the generated names."""
+    if page.soup is None:
+        return None
+    form = page.soup.find("form", attrs={"name": "Form0"}) or page.soup.find("form")
+    if form is None:
+        return None
+    fields: list[tuple[str, str]] = []
+    library = None
+    rows: list[tuple[str, str]] = []
+    operators: list[str] = []
+    pending_select = None
+    for element in form.find_all(["input", "select", "textarea"]):
+        name = element.get("name")
+        if not name:
+            continue
+        if element.name == "select":
+            options = [o.get("value", o.get_text(strip=True)) for o in element.find_all("option")]
+            chosen = element.find("option", selected=True) or (element.find("option") if options else None)
+            fields.append((name, chosen.get("value", chosen.get_text(strip=True)) if chosen else ""))
+            if all(option in options for option in field_options):
+                pending_select = name
+            elif operator in options:
+                operators.append(name)
+            elif library is None and len(options) > 10 and not any(o in options for o in field_options):
+                library = name
+            continue
+        kind = (element.get("type") or "text").lower()
+        if kind in ("submit", "button", "checkbox", "radio", "image", "reset"):
+            continue
+        fields.append((name, element.get("value", "")))
+        if kind in ("text", "search") and pending_select:
+            rows.append((pending_select, name))
+            pending_select = None
+    submit = next((s for s in reversed(page.submits) if s[1] == submit_label), None)
+    if library is None or len(rows) < 2 or not operators or submit is None:
+        return None
+    return SearchForm(fields, library, rows, operators, submit)
+
+
+def _isbn10_to_13(isbn10: str) -> str:
+    core = "978" + isbn10[:9]
+    total = sum(int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(core))
+    return core + str((10 - total % 10) % 10)
+
+
+def parse_isbn(page: AdisPage) -> str | None:
+    """ISBN-13 (or EAN) of a full record page ("Vollanzeige"); None on result lists or other pages."""
+    if page.soup is None:
+        return None
+    values: dict[str, str] = {}
+    for header in page.soup.find_all(["th", "dt"]):
+        label = _text(header)
+        cell = header.find_next_sibling(["td", "dd"])
+        if label in ("ISBN", "Nummer") and cell is not None and label not in values:
+            values[label] = cell.get_text(" ")
+    ean = re.search(r"\b(97[89]\d{10})\b", values.get("Nummer", ""))
+    if ean:
+        return ean.group(1)
+    for token in re.findall(r"[0-9Xx][0-9Xx-]{8,16}", values.get("ISBN", "")):
+        digits = token.replace("-", "").upper()
+        if len(digits) == 13 and digits.isdigit():
+            return digits
+        if len(digits) == 10 and digits[:9].isdigit():
+            return _isbn10_to_13(digits)
+    return None

@@ -19,6 +19,14 @@ SESSION = "_testsession"
 
 LINKS = {"Mein Konto": "*SBK", "Sitzung beenden": "*SE"}
 
+# Catalog records for the cover lookup: (title, shelf mark, library) -> list of EANs (one = unique hit)
+RECORDS = {
+    ("Der kleine Testdrache", "k BEI", "Testbibliothek"): ["9783000000002"],
+    ("Kochen ohne Herd", "u KOC", "Testbibliothek"): ["9783000000019", "9783000000026"],  # two editions: no unique hit
+}
+LIBRARIES = ["Bitte auswählen", "Allach", "Bogenhausen", "Giesing", "Hadern", "Laim", "Moosach", "Pasing", "Riem", "Sendling", "Testbibliothek", "Westend"]
+FIELDS = ["", "ISBN, ISSN, ISMN", "Person", "Signatur", "Titel"]
+
 
 @dataclass
 class FakeLoan:
@@ -48,6 +56,8 @@ class FakeAdis:
     message: str = ""
     requests: list[str] = field(default_factory=list)
     renew_posts: int = 0
+    searches: list[tuple[str, str, str]] = field(default_factory=list)
+    hits: list[str] = field(default_factory=list)
 
     # ---- rendering ----------------------------------------------------------
 
@@ -88,7 +98,7 @@ class FakeAdis:
             body = f"""<p>Hallo Erika Beispiel - {CARD}</p><dl>
 <dt class="adis-term">Ausweis gültig bis</dt><dd class="adis-value">{self.valid_until:%d.%m.%Y}</dd>
 <dt class="adis-term">Kontostand vom:</dt><dd class="adis-value">Datum: 02.03.2030 Uhrzeit: 10:00</dd></dl>"""
-            return self._page("Mein Konto - Katalog", body, ["Druckversion"])
+            return self._page("Mein Konto - Katalog", body, ["Suchen", "Erweiterte Suche", "Druckversion"])
         if self.view == "loans":
             rows = []
             for i, loan in enumerate(self.loans):
@@ -103,7 +113,37 @@ class FakeAdis:
 <th><span class="invisible">Markieren</span></th><th>Fällig am</th><th>Bibliothek</th><th>Titel</th><th>Hinweis</th>
 </tr></thead><tbody>{''.join(rows)}</tbody></table>"""
             return self._page("Meine Ausleihen - Katalog", body, ["Druckversion", "Alle verlängern", "Markierte Medien verlängern", "Zur Übersicht"])
+        if self.view == "advanced":
+            return self._page("Erweiterte Suche - Katalog", self._advanced_form(), ["Suchen", "Wiederholen", "Leeren", "Suchen"])
+        if self.view == "record":
+            ean = self.hits[0]
+            body = f"""<table><tr><th scope="row">Titel</th><td>Testtitel</td></tr>
+<tr><th scope="row">ISBN</th><td>{ean[3:6]}-{ean[6:12]}-{ean[12]} <br> {ean[3:12]}X</td></tr>
+<tr><th scope="row">Nummer</th><td>{ean} (Europäische Artikelnummerierung (EAN))</td></tr></table>"""
+            return self._page("Vollanzeige - Katalog", body, ["Suchen", "Erweiterte Suche", "Bestellen/Vormerken"])
+        if self.view == "results":
+            body = f"<p>Treffer: {len(self.hits)}</p>" + "".join(f"<div>Treffer {n}</div>" for n in range(len(self.hits)))
+            return self._page("Trefferliste - Katalog", body, ["Suchen", "Erweiterte Suche"])
         return self._page("Katalog", "<p>Suche</p>", ["Suchen"])
+
+    @staticmethod
+    def _advanced_form() -> str:
+        def select(name, options, chosen=""):
+            opts = "".join(f'<option value="{html.escape(o)}"{" selected" if o == chosen else ""}>{html.escape(o)}</option>' for o in options)
+            return f'<select name="{name}">{opts}</select>'
+
+        rows = []
+        for n, chosen in enumerate(["Titel", "Person", "ISBN, ISSN, ISMN"]):
+            rows.append(select(f"$Select${2 * n}", FIELDS, chosen) + f'<input type="search" name="$Autosuggest${n}" value="">')
+            if n < 2:
+                rows.append(select(f"$Select${2 * n + 1}", ["", "NICHT", "ODER", "UND"], "UND"))
+        return (
+            '<input type="search" name="$Autosuggest" value="">'
+            + select("$Select", LIBRARIES, "Bitte auswählen")
+            + "".join(rows)
+            + select("$Select$5", ["- Alle -", "Buch", "CD", "DVD-Video", "Spiel", "E-Book", "Noten", "Karte", "LP", "Video", "Zeitung", "Zeitschriften"], "- Alle -")
+            + '<input type="text" name="$Textfield$0" value="">'
+        )
 
     # ---- requests -------------------------------------------------------------
 
@@ -156,6 +196,19 @@ class FakeAdis:
                 self.view = "loans"
             elif code == "*SE":
                 self.logged_in, self.view = False, "catalog"
+        elif self._pressed(form, "Erweiterte Suche"):
+            self.view = "advanced"
+        elif self._pressed(form, "Zur Übersicht"):
+            self.view = "overview"
+        elif self.view == "advanced" and "pressed" in form.get("$Button$3", []):
+            first = lambda key: form.get(key, [""])[0]  # noqa: E731
+            assert first("$Select$0") == "Titel" and first("$Select$1") == "UND", form
+            title = first("$Autosuggest$0")
+            signature = first("$Autosuggest$1") if first("$Select$2") == "Signatur" else ""
+            library = first("$Select")
+            self.searches.append((title, signature, library))
+            self.hits = RECORDS.get((title, signature, library), [])
+            self.view = "record" if len(self.hits) == 1 else "results"
         elif "Markierte Medien verlängern" in form.get("$Button$2", []):
             assert "pressed" in form["$Button$2"], "button marker missing"
             self.renew_posts += 1
@@ -169,6 +222,10 @@ class FakeAdis:
                     self.loans.append(loan)  # the real catalog moves renewed items to the end
             self.message = 'Sie haben versucht, die Leihfrist von Medien zu verlängern. Beachten Sie bitte die Spalte "Hinweis".'
         return 303, f"/aDISWeb/{SESSION}/app/opac/{self.count}"
+
+    @staticmethod
+    def _pressed(form: dict[str, list[str]], label: str) -> bool:
+        return any(label in values and "pressed" in values for key, values in form.items() if key.startswith("$Button"))
 
     @staticmethod
     def _login_page(error: bool) -> str:

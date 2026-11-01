@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFl
 from homeassistant.const import CONF_NAME, CONF_PASSWORD
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -22,7 +23,9 @@ from homeassistant.helpers.selector import (
 from .api import LibraryAuthError, LibraryConnectionError, LibraryError
 from .const import (
     CONF_CARD_NUMBER,
+    CONF_LOOKUP_COVERS,
     CONF_SCAN_INTERVAL_HOURS,
+    DEFAULT_LOOKUP_COVERS,
     DEFAULT_SCAN_INTERVAL_HOURS,
     DOMAIN,
     MAX_SCAN_INTERVAL_HOURS,
@@ -119,9 +122,13 @@ class LibraryOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             return self.async_create_entry(
-                data={CONF_SCAN_INTERVAL_HOURS: int(user_input[CONF_SCAN_INTERVAL_HOURS])}
+                data={
+                    CONF_SCAN_INTERVAL_HOURS: int(user_input[CONF_SCAN_INTERVAL_HOURS]),
+                    CONF_LOOKUP_COVERS: bool(user_input[CONF_LOOKUP_COVERS]),
+                }
             )
         current = self.config_entry.options.get(CONF_SCAN_INTERVAL_HOURS, DEFAULT_SCAN_INTERVAL_HOURS)
+        covers = self.config_entry.options.get(CONF_LOOKUP_COVERS, DEFAULT_LOOKUP_COVERS)
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
@@ -134,7 +141,8 @@ class LibraryOptionsFlow(OptionsFlow):
                             unit_of_measurement="h",
                             mode=NumberSelectorMode.BOX,
                         )
-                    )
+                    ),
+                    vol.Required(CONF_LOOKUP_COVERS, default=covers): BooleanSelector(),
                 }
             ),
         )

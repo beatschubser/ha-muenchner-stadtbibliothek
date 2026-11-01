@@ -34,10 +34,14 @@
   "options": {
     "step": {
       "init": {
-        "title": "Update interval",
+        "title": "Options",
         "description": "Every update logs in to the catalog once and out again. Due dates rarely change, a few hours are enough.",
         "data": {
-          "scan_interval_hours": "Update every"
+          "scan_interval_hours": "Update every",
+          "lookup_covers": "Look up covers"
+        },
+        "data_description": {
+          "lookup_covers": "Searches every new item once in the catalog (title, shelf mark, library) and keeps its ISBN for the cover. Two extra page loads per new item."
         }
       }
     }

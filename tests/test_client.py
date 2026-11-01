@@ -118,6 +118,50 @@ def test_fetch():
     ]
 
 
+def test_cover_lookup_once_per_item():
+    fake = FakeAdis()
+    data = run(fake, lambda c: c.async_fetch({}))
+    assert fake.searches == [
+        ("Der kleine Testdrache", "k BEI", "Testbibliothek"),
+        ("Kochen ohne Herd", "u KOC", "Testbibliothek"),
+        ("Reise zum Mond", "b PRO", "Testbibliothek"),
+    ]
+    assert data.looked_up == {"00000100000001": "9783000000002", "00000100000002": None, "00000100000003": None}
+    first = data.loans[0].as_dict()
+    assert first["isbn"] == "9783000000002"
+    assert first["cover_url"] == "https://ssl.muenchen.de/vlb/cover/9783000000002/m"
+    assert data.loans[1].as_dict()["cover_url"] is None
+    assert not fake.logged_in, "client must log out after the lookups"
+
+    # known items are not searched again
+    fake2 = FakeAdis()
+    data2 = run(fake2, lambda c: c.async_fetch(data.looked_up))
+    assert fake2.searches == []
+    assert data2.loans[0].isbn == "9783000000002"
+
+    # lookups switched off
+    fake3 = FakeAdis()
+    run(fake3, lambda c: c.async_fetch(None))
+    assert fake3.searches == []
+
+
+def test_search_form_of_the_real_catalog():
+    html = (Path(__file__).resolve().parent / "fixtures" / "advanced_search.html").read_text(encoding="utf-8")
+    page = parser.parse_page(html, "https://ssl.muenchen.de/aDISWeb/_session/app/opac/3")
+    form = parser.parse_search_form(page, ("Titel", "Signatur"), "UND", "Suchen")
+    assert form is not None
+    assert form.library == "$Select"
+    assert form.rows == [("$Select$0", "$Autosuggest$0"), ("$Select$2", "$Autosuggest$1"), ("$Select$4", "$Autosuggest$2")]
+    assert form.operators == ["$Select$1", "$Select$3"]
+    assert form.submit == ("$Button$5", "Suchen", "$$GFBO_4"), "the form's own button, not the one in the header"
+    assert ("imageButton", "") not in form.fields
+
+
+def test_isbn_from_isbn10():
+    page = parser.parse_page('<form name="Form0"><table><tr><th>ISBN</th><td>3-440-15950-7</td></tr></table></form>', "https://x/")
+    assert parser.parse_isbn(page) == "9783440159507"
+
+
 def test_fetch_without_loans():
     data = run(FakeAdis(loans=[]), lambda c: c.async_fetch())
     assert data.loans == []
