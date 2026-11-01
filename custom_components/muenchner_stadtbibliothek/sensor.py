@@ -30,6 +30,8 @@ def _loans_attributes(data: AccountData) -> dict[str, Any]:
     return {
         "loans": [loan.as_dict() for loan in sorted(data.loans, key=lambda l: (l.due_date or date.max, l.title))],
         "renewable": sum(1 for loan in data.loans if loan.renewable),
+        # also here so automations find the expiry of the card next to its loans
+        "card_valid_until": data.card_valid_until.isoformat() if data.card_valid_until else None,
         "last_update": data.updated.isoformat(timespec="seconds"),
     }
 

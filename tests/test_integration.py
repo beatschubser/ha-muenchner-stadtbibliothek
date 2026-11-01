@@ -85,6 +85,7 @@ async def test_sensors_and_buttons(hass: HomeAssistant, fake) -> None:
     loans = hass.states.get(ids["loans"])
     assert loans.state == "3"
     assert loans.attributes["renewable"] == 2
+    assert loans.attributes["card_valid_until"] == "2030-12-31"
     assert loans.attributes["loans"][0]["title"] == "Der kleine Testdrache"
 
     buttons = _button_ids(hass, entry)
