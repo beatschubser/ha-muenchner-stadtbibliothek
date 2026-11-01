@@ -44,3 +44,9 @@ scripts/release_notes.py  release notes from commit subjects
 ## Release workflow
 
 Same as in ha-sleek-school-schedule: `python3 tests/test_client.py`, `python3 scripts/bump_version.py X.Y.Z`, commit as `Claude <noreply@anthropic.com>` with short neutral subject lines, push to `main`; `release.yml` creates the release. Show the release notes to the maintainer after every release.
+
+## Lessons learned
+
+- 0.1.0 failed in a real HA setup with "not reachable"; 0.1.2 (browser compatible user agent, login button found by field name `LLOGIN`) works. Which of the two was the cause is unknown; keep both.
+- The OIDC login page is served in English without `Accept-Language: de` ("Login" instead of "Anmelden"); always send the German header and never rely on button labels where a field name exists.
+- No PyPI here (no aiohttp): real catalog checks run through tests/fake_adis.py-style bridges with `requests`, only with invented card numbers.
