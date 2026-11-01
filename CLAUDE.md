@@ -45,7 +45,7 @@ scripts/release_notes.py  release notes from commit subjects
 
 ## Card (design approved by the maintainer, "C2" one-column tiles)
 
-- One row per loan: ring with remaining days (full ring = `loan_days`, default 28; orange <= 3 days, red + red border when overdue), title (2 lines), author · library, due date.
+- One row per loan: ring with remaining days (full ring = `loan_days`, default 28; orange <= 3 days, red + red border when overdue), title (1.08em, 2 lines), author · library (library optional: `show_library`), due date.
 - Right side: "Verlängern" pill (primary color 18 %) only when `renewable`; green "Heute verlängert" pill when `renewed_today`; nothing otherwise. No error display in the card (HA shows the error). Narrow columns (< 400 px): icon-only pills.
 - Accounts = devices of the integration with a loans sensor (found via `hass.entities`, `translation_key`); name = device `name_by_user || name` (device name = entry title from the setup field "Name"). Several accounts: pills like in Sleek School Schedule (active one kept per card instance); option `account` (name, case-insensitive, or the loans entity id; the 0.2.0 option `entity` still works) fixes one account and shows `title ?? name`.
 - The card finds the buttons by `barcode` attribute among the account's entities, the validity sensor by `translation_key`.

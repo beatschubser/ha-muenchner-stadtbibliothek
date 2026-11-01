@@ -49,6 +49,7 @@ The integration brings its own card and registers it as dashboard resource autom
 | `account` | all | name of one library card (the name given during setup, or the renamed device name). Without it, all cards are shown as selection pills |
 | `title` | name of the library card | heading when only one library card is shown |
 | `show_card` | `true` | "card valid until" in the header |
+| `show_library` | `true` | library next to the author |
 | `loan_days` | `28` | loan period in days, shown as a full ring |
 | `appearance` | `auto` | `auto` (theme), `light`, `dark` |
 

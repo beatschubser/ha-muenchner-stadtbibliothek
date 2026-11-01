@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "muenchner_stadtbibliothek"
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 
 # Library catalog (aDIS/BMS by aStec). Changeable in case the library moves the catalog.
 DEFAULT_BASE_URL = "https://ssl.muenchen.de"

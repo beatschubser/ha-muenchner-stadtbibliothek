@@ -6,11 +6,12 @@
  *   account     name of one library card (as set up in the integration); default: all cards as pills
  *   title       heading when only one card is shown (default: its name)
  *   show_card   show "card valid until" in the header (default: true)
+ *   show_library  show the library next to the author (default: true)
  *   loan_days   loan period in days, full ring (default: 28)
  *   appearance  auto | light | dark (default: auto = theme)
  */
 
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 const DOMAIN = "muenchner_stadtbibliothek";
 const CARD_TYPE = "muenchner-stadtbibliothek-card";
 const DEFAULT_LOAN_DAYS = 28;
@@ -39,6 +40,7 @@ const TEXTS = {
     editor_all: "Alle (als Auswahl-Pillen)",
     editor_title: "Titel (leer = Name des Ausweises)",
     editor_show_card: "Ausweis-Gültigkeit anzeigen",
+    editor_show_library: "Bibliothek anzeigen",
     editor_loan_days: "Leihfrist (Tage, voller Ring)",
     editor_appearance: "Darstellung",
     appearance_auto: "Wie Theme",
@@ -65,6 +67,7 @@ const TEXTS = {
     editor_all: "All (as selection pills)",
     editor_title: "Title (empty = name of the card)",
     editor_show_card: "Show card validity",
+    editor_show_library: "Show library",
     editor_loan_days: "Loan period (days, full ring)",
     editor_appearance: "Appearance",
     appearance_auto: "Like theme",
@@ -292,7 +295,7 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     const ringLabel =
       loan.days === null ? "" : overdue ? t(hass, "overdue_short") : loan.days === 0 ? t(hass, "today") : loan.days === 1 ? t(hass, "day_left") : t(hass, "days_left", { n: loan.days });
     const dueText = loan.due ? t(hass, overdue ? "overdue" : "due", { date: formatDate(hass, loan.due) }) : "";
-    const meta = [loan.author, loan.library].filter(Boolean).join(" · ");
+    const meta = [loan.author, this._config.show_library !== false ? loan.library : null].filter(Boolean).join(" · ");
 
     let action = "";
     if (loan.renewedToday) {
@@ -368,7 +371,7 @@ ha-card { display:block; padding:16px; color:var(--primary-text-color); containe
 .row.soon { --lib-tone:var(--warning-color, #ff9800); }
 .row.overdue { --lib-tone:var(--error-color, #db4437); }
 .text { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
-.name { font-size:1em; font-weight:500; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.name { font-size:1.08em; font-weight:500; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .meta { font-size:.8em; color:var(--secondary-text-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .due { font-size:.85em; font-weight:500; color:var(--lib-tone); }
 .row.normal .due { color:var(--secondary-text-color); }
@@ -437,7 +440,8 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
           },
         ],
       },
-      { name: "show_card", selector: { boolean: {} } }
+      { name: "show_card", selector: { boolean: {} } },
+      { name: "show_library", selector: { boolean: {} } }
     );
     return fields;
   }
@@ -464,6 +468,7 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
       loan_days: this._config.loan_days ?? DEFAULT_LOAN_DAYS,
       appearance: this._config.appearance || "auto",
       show_card: this._config.show_card !== false,
+      show_library: this._config.show_library !== false,
     };
   }
 
@@ -481,6 +486,8 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
     else delete config.appearance;
     if (value.show_card === false) config.show_card = false;
     else delete config.show_card;
+    if (value.show_library === false) config.show_library = false;
+    else delete config.show_library;
     this._config = config;
     this._form.schema = this._schema(); // title field appears or disappears with the account choice
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
