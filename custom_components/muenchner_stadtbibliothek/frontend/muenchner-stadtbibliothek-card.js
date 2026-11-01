@@ -8,12 +8,13 @@
  *   show_card   show "card valid until" in the header (default: true)
  *   show_library  show the library next to the author (default: true)
  *   max_width   maximum width in px, centered (default: 640, 0 = full width)
+ *   show_covers show the cover of each item (default: true; placeholder with the title when none was found)
  *   card_warn_days  warn this many days before the card expires (default: 30; red from 7 days)
  *   loan_days   loan period in days, full ring (default: 28)
  *   appearance  auto | light | dark (default: auto = theme)
  */
 
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 const DOMAIN = "muenchner_stadtbibliothek";
 const CARD_TYPE = "muenchner-stadtbibliothek-card";
 const DEFAULT_LOAN_DAYS = 28;
@@ -57,6 +58,7 @@ const TEXTS = {
     editor_title: "Titel (leer = Name des Ausweises)",
     editor_show_card: "Ausweis-Gültigkeit anzeigen",
     editor_show_library: "Bibliothek anzeigen",
+    editor_show_covers: "Cover anzeigen",
     editor_card_warn_days: "Warnung vor Ablauf des Ausweises (Tage)",
     editor_max_width: "Maximale Breite (px, 0 = volle Breite)",
     editor_loan_days: "Leihfrist (Tage, voller Ring)",
@@ -96,6 +98,7 @@ const TEXTS = {
     editor_title: "Title (empty = name of the card)",
     editor_show_card: "Show card validity",
     editor_show_library: "Show library",
+    editor_show_covers: "Show covers",
     editor_card_warn_days: "Warn before the card expires (days)",
     editor_max_width: "Maximum width (px, 0 = full width)",
     editor_loan_days: "Loan period (days, full ring)",
@@ -183,6 +186,17 @@ const RENEW_ICON =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"></path><path d="M21 4v5h-5"></path></svg>';
 const DONE_ICON =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>';
+const FAILED_ICON =
+  '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v6"></path><path d="M12 17h.01"></path></svg>';
+// placeholder covers: one of these colors per item, always the same for the same item
+const PLACEHOLDER_COLORS = ["#8e5b9a", "#3d7ea6", "#a0623a", "#4a8a5c", "#9a4a5a", "#5a6fa8", "#8a7a3a", "#3a8a8a"];
+
+function hashCode(text) {
+  let h = 0;
+  for (const ch of String(text)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h;
+}
+
 const RING_RADIUS = 23;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 const RING_STROKE = 6;
@@ -209,6 +223,19 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     this._config = {};
     this._pending = new Set(); // barcodes being renewed right now
     this._failed = new Map(); // barcode -> timer of the lock after a failed renewal
+    this._brokenCovers = new Set(); // cover urls that did not load: placeholder instead
+    // img errors do not bubble; catch them on the way down
+    this._card.addEventListener(
+      "error",
+      (e) => {
+        const url = e.target?.dataset?.cover;
+        if (url && !this._brokenCovers.has(url)) {
+          this._brokenCovers.add(url);
+          this._render();
+        }
+      },
+      true
+    );
     this._active = null; // id of the account shown when there are pills
     this._size = 3;
   }
@@ -367,26 +394,27 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     const dueText = loan.due ? t(hass, overdue ? "overdue" : "due", { date: formatDate(hass, loan.due) }) : "";
     const meta = [loan.author, this._config.show_library !== false ? loan.library : null].filter(Boolean).join(" · ");
 
+    // round icon buttons; the text is in the aria-label and the tooltip
     let action = "";
     if (loan.renewedToday) {
-      action = `<div class="pill done" role="img" aria-label="${esc(t(hass, "renewed"))}">${DONE_ICON}<span class="label">${esc(t(hass, "renewed"))}</span></div>`;
+      const label = esc(t(hass, "renewed"));
+      action = `<div class="act done" role="img" aria-label="${label}" title="${label}">${DONE_ICON}</div>`;
     } else if (loan.renewable && buttonId) {
       const pending = this._pending.has(loan.barcode);
       const failed = !pending && this._failed.has(loan.barcode);
-      const content = pending
-        ? `<span class="spin">${RENEW_ICON}</span><span class="label">${esc(t(hass, "renewing"))}</span>`
-        : failed
-          ? `<span class="label">${esc(t(hass, "failed"))}</span>`
-          : `${RENEW_ICON}<span class="label">${esc(t(hass, "renew"))}</span>`;
-      action = `<button type="button" class="pill renew${failed ? " failed" : ""}" data-button="${esc(buttonId)}" data-barcode="${esc(loan.barcode)}"
-                  aria-label="${esc(t(hass, "renew_label", { title: loan.title }))}" ${pending || failed ? "disabled" : ""}>${content}</button>`;
+      const label = esc(pending ? t(hass, "renewing") : failed ? t(hass, "failed") : t(hass, "renew_label", { title: loan.title }));
+      const icon = pending ? `<span class="spin">${RENEW_ICON}</span>` : failed ? FAILED_ICON : RENEW_ICON;
+      action = `<button type="button" class="act renew${failed ? " failed" : ""}" data-button="${esc(buttonId)}" data-barcode="${esc(loan.barcode)}"
+                  aria-label="${label}" title="${label}" ${pending || failed ? "disabled" : ""}>${icon}</button>`;
     }
 
-    return `<div class="row ${tone}">
+    const covers = this._config.show_covers !== false;
+    return `<div class="row ${tone}${covers ? "" : " nocover"}">
+      ${covers ? this._cover(loan) : ""}
       <svg class="ring" viewBox="0 0 56 56" role="img" aria-label="${esc(ringLabel)}">
         <circle class="track" cx="28" cy="28" r="${RING_RADIUS}"></circle>
         <circle class="bar${ring.full ? " full" : ""}" cx="28" cy="28" r="${RING_RADIUS}" stroke-dasharray="${ring.dash}" transform="rotate(-90 28 28)"></circle>
-        <text x="28" y="33" text-anchor="middle">${esc(ringText)}</text>
+        <text x="28" y="34" text-anchor="middle">${esc(ringText)}</text>
       </svg>
       <div class="text">
         <div class="name">${esc(loan.title)}</div>
@@ -395,6 +423,15 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
       </div>
       ${action}
     </div>`;
+  }
+
+  /** Cover from the catalog (scaled into a fixed frame, bottom aligned) or a colored placeholder with the title. */
+  _cover(loan) {
+    if (loan.cover_url && !this._brokenCovers.has(loan.cover_url)) {
+      return `<div class="cover"><img src="${esc(loan.cover_url)}" alt="" loading="lazy" data-cover="${esc(loan.cover_url)}"></div>`;
+    }
+    const color = PLACEHOLDER_COLORS[hashCode(loan.barcode || loan.title) % PLACEHOLDER_COLORS.length];
+    return `<div class="cover"><div class="placeholder" style="--lib-cover:${color}" aria-hidden="true"><span>${esc(loan.title)}</span></div></div>`;
   }
 
   async _onClick(event) {
@@ -451,40 +488,54 @@ ha-card { display:block; box-sizing:border-box; margin:0 auto; padding:16px; col
 .dot.alert, .dot.expired { background:var(--error-color, #db4437); }
 .tab.active .dot { box-shadow:0 0 0 2px var(--text-primary-color, #fff); }
 .list { display:flex; flex-direction:column; gap:8px; }
-.row { display:flex; align-items:center; gap:14px; padding:12px; border-radius:12px; border:1px solid transparent;
+.row { display:flex; align-items:flex-start; gap:12px; padding:10px 12px; border-radius:12px; border:1px solid transparent;
        background:var(--lib-tile, color-mix(in srgb, var(--primary-text-color) 5%, var(--card-background-color, var(--ha-card-background, #fff)))); }
 .row.overdue { border-color:var(--error-color, #db4437); }
-.ring { width:56px; height:56px; flex-shrink:0; }
+/* cover: fixed frame, image scaled in without cropping and aligned to the bottom */
+.cover { width:84px; height:124px; flex-shrink:0; display:flex; align-items:flex-end; justify-content:center; }
+.cover img { display:block; max-width:100%; max-height:100%; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.45); }
+.placeholder { box-sizing:border-box; width:100%; height:100%; border-radius:6px; padding:8px; display:flex; align-items:flex-end;
+               background:linear-gradient(160deg, var(--lib-cover) 0%, rgba(0,0,0,.6) 150%); box-shadow:0 2px 8px rgba(0,0,0,.45); color:#fff; }
+.placeholder span { font-size:11px; font-weight:700; line-height:1.15; overflow-wrap:anywhere;
+                    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.ring { width:44px; height:44px; flex-shrink:0; }
 .ring .track { fill:none; stroke:color-mix(in srgb, var(--primary-text-color) 14%, transparent); stroke-width:6; }
 .ring .bar { fill:none; stroke:var(--lib-tone); stroke-width:6; stroke-linecap:round; }
 .ring .bar.full { stroke-linecap:butt; }
-.ring text { font-size:16px; font-weight:700; fill:var(--lib-tone); font-family:inherit; }
+.ring text { font-size:18px; font-weight:700; fill:var(--lib-tone); font-family:inherit; }
 .row { --lib-tone:var(--secondary-text-color); }
 .row.soon { --lib-tone:var(--warning-color, #ff9800); }
 .row.overdue { --lib-tone:var(--error-color, #db4437); }
-.text { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.text { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; padding-top:2px; }
 .name { font-size:1.08em; font-weight:500; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .meta { font-size:.8em; color:var(--secondary-text-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .due { font-size:.85em; font-weight:500; color:var(--lib-tone); }
 .row.normal .due { color:var(--secondary-text-color); }
-.pill { box-sizing:border-box; flex-shrink:0; width:140px; min-height:44px; padding:0 12px; border:0; border-radius:22px;
-        display:flex; align-items:center; justify-content:center; gap:6px; font:inherit; font-size:.85em; font-weight:500; text-align:center; }
-.pill.renew { background:color-mix(in srgb, var(--primary-color) 18%, transparent); color:var(--primary-color); cursor:pointer; }
-.pill.renew:hover { background:color-mix(in srgb, var(--primary-color) 26%, transparent); }
-.pill.renew:focus-visible { outline:2px solid var(--primary-color); outline-offset:2px; }
-.pill.renew[disabled] { cursor:default; opacity:.7; }
-.pill.renew.failed { background:color-mix(in srgb, var(--error-color, #db4437) 18%, transparent); color:var(--error-color, #db4437); opacity:1; }
-.pill.done { background:color-mix(in srgb, var(--success-color, #43a047) 18%, transparent); color:var(--success-color, #43a047); }
-.pill.done svg { display:none; }
+/* round action buttons, vertically centered */
+.act { align-self:center; box-sizing:border-box; flex-shrink:0; width:50px; height:50px; padding:0; border:0; border-radius:25px;
+       display:flex; align-items:center; justify-content:center; }
+.act svg { width:21px; height:21px; }
+.act.renew { background:color-mix(in srgb, var(--primary-color) 18%, transparent); color:var(--primary-color); cursor:pointer; }
+.act.renew:hover { background:color-mix(in srgb, var(--primary-color) 26%, transparent); }
+.act.renew:focus-visible { outline:2px solid var(--primary-color); outline-offset:2px; }
+.act.renew[disabled] { cursor:default; opacity:.7; }
+.act.renew.failed { background:color-mix(in srgb, var(--error-color, #db4437) 18%, transparent); color:var(--error-color, #db4437); opacity:1; }
+.act.done { background:color-mix(in srgb, var(--success-color, #43a047) 18%, transparent); color:var(--success-color, #43a047); }
 .message { padding:8px 4px; color:var(--secondary-text-color); }
 .spin { display:flex; animation:lib-spin 1s linear infinite; }
 @keyframes lib-spin { to { transform:rotate(360deg); } }
-/* narrow columns: icon-only buttons, the label stays available to screen readers via aria-label */
+/* without covers: larger ring, everything centered like before */
+.row.nocover { align-items:center; }
+.row.nocover .ring { width:56px; height:56px; }
+.row.nocover .text { padding-top:0; }
+/* narrow columns: smaller cover, ring and buttons */
 @container (max-width: 400px) {
   .row { gap:10px; padding:10px; }
-  .pill { width:44px; padding:0; }
-  .pill .label { display:none; }
-  .pill.done svg { display:block; }
+  .cover { width:60px; height:88px; }
+  .placeholder { padding:6px; }
+  .placeholder span { font-size:9px; }
+  .ring { width:36px; height:36px; }
+  .act { width:44px; height:44px; }
 }
 `;
 
@@ -536,7 +587,8 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
         ],
       },
       { name: "show_card", selector: { boolean: {} } },
-      { name: "show_library", selector: { boolean: {} } }
+      { name: "show_library", selector: { boolean: {} } },
+      { name: "show_covers", selector: { boolean: {} } }
     );
     return fields;
   }
@@ -566,6 +618,7 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
       appearance: this._config.appearance || "auto",
       show_card: this._config.show_card !== false,
       show_library: this._config.show_library !== false,
+      show_covers: this._config.show_covers !== false,
     };
   }
 
@@ -590,6 +643,8 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
     else delete config.show_card;
     if (value.show_library === false) config.show_library = false;
     else delete config.show_library;
+    if (value.show_covers === false) config.show_covers = false;
+    else delete config.show_covers;
     this._config = config;
     this._form.schema = this._schema(); // title field appears or disappears with the account choice
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));

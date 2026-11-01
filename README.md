@@ -26,7 +26,8 @@
 - **Ausleihen** mit Fälligkeit, Bibliothek, Titel, Autor, Signatur, Mediennummer und dem Hinweis aus dem Katalog (z. B. „verlängerbar“, „Heute verlängert“).
 - **Nächste Fälligkeit** mit den Titeln, die an diesem Tag fällig sind.
 - **Ein Verlängern-Button pro Ausleihe.** Die Buttons erscheinen und verschwinden mit den Ausleihen. Nicht verlängerbare Medien werden gar nicht erst an den Katalog geschickt, der Button zeigt stattdessen den Grund.
-- **Eigene Dashboard-Karte** mit Resttagen, Verlängern-Button und Auswahl zwischen mehreren Ausweisen.
+- **Eigene Dashboard-Karte** mit Cover, Resttagen, Verlängern-Button und Auswahl zwischen mehreren Ausweisen.
+- **Cover:** Jedes neue Medium wird einmal im Katalog gesucht (Titel, Signatur, Bibliothek). Bei einem eindeutigen Treffer merkt sich die Integration die ISBN; das Cover lädt der Browser direkt vom Cover-Dienst des Katalogs. Abschaltbar unter **Konfigurieren**.
 - Mehrere Ausweise (z. B. einer pro Familienmitglied), jeder als eigenes Gerät mit eigenem Namen.
 - Wenig Verkehr: Jede Aktualisierung ist eine kurze Katalog-Sitzung (Anmelden, Übersicht, Ausleihen, Abmelden), ohne Wiederholungen. Standardintervall 4 Stunden, einstellbar von 1 bis 48 Stunden.
 
@@ -52,6 +53,7 @@ Die Integration bringt ihre eigene Karte mit und trägt sie automatisch als Dash
 | `show_card` | `true` | „Ausweis gültig bis“ in der Kopfzeile |
 | `show_library` | `true` | Bibliothek neben dem Autor |
 | `max_width` | `640` | maximale Breite in px, zentriert (z. B. in Pop-ups); `0` = volle Breite |
+| `show_covers` | `true` | Cover links in jeder Zeile; ohne gefundenes Cover ein farbiger Platzhalter mit dem Titel |
 | `card_warn_days` | `30` | ab so vielen Tagen vor Ablauf wird die Ausweis-Gültigkeit orange, ab 7 Tagen rot mit Hinweisbalken |
 | `loan_days` | `28` | Leihfrist in Tagen, entspricht dem vollen Ring |
 | `appearance` | `auto` | `auto` (Theme), `light`, `dark` |
@@ -63,7 +65,7 @@ account: Anna   # optional, der Name aus der Einrichtung
 
 Sind mehrere Ausweise eingerichtet, zeigt die Karte oben eine Pille pro Name; ein Tipp wechselt die Ansicht. Für nur eine Person den Namen im Editor auswählen.
 
-Jede Ausleihe zeigt die Resttage als Ring (orange ab 3 Tagen, rot wenn überfällig), Titel, Autor, Bibliothek und Fälligkeit. Verlängerbare Medien haben einen Button „Verlängern“, heute verlängerte ein grünes „Heute verlängert“; nicht verlängerbare Medien haben keinen Button. Während einer Verlängerung und 5 Sekunden nach einem Fehler ist der Button gesperrt. In schmalen Spalten zeigen die Buttons nur Icons. Läuft ein Ausweis bald ab, wird die Gültigkeit orange (30 Tage vorher) bzw. rot mit Hinweisbalken (7 Tage vorher); auch bei ausgeschalteter Gültigkeitsanzeige. Die Pille des betroffenen Ausweises bekommt einen farbigen Punkt.
+Jede Ausleihe zeigt das Cover, die Resttage als Ring (orange ab 3 Tagen, rot wenn überfällig), Titel, Autor, Bibliothek und Fälligkeit. Cover in anderen Formaten (CDs, Bildbände) werden ohne Beschnitt eingepasst und unten ausgerichtet. Verlängerbare Medien haben einen runden Verlängern-Button, heute verlängerte ein grünes Häkchen; nicht verlängerbare Medien haben keinen Button. Während einer Verlängerung und 5 Sekunden nach einem Fehler ist der Button gesperrt. Läuft ein Ausweis bald ab, wird die Gültigkeit orange (30 Tage vorher) bzw. rot mit Hinweisbalken (7 Tage vorher); auch bei ausgeschalteter Gültigkeitsanzeige. Die Pille des betroffenen Ausweises bekommt einen farbigen Punkt.
 
 ## Entitäten
 
@@ -72,7 +74,7 @@ Jede Ausleihe zeigt die Resttage als Ring (orange ab 3 Tagen, rot wenn überfäl
 | Ausweis gültig bis / Card valid until | Datum | |
 | Ausleihen / Loans | Anzahl der Ausleihen | `loans` (Liste), `renewable`, `card_valid_until`, `last_update` |
 | Nächste Fälligkeit / Next due date | Datum | `count`, `titles`, `renewable` |
-| *Titel* verlängern / Renew *title* (Button) | | `barcode`, `title`, `author`, `full_title`, `signature`, `library`, `due_date`, `hint`, `renewable`, `renewed_today`, `renewals` |
+| *Titel* verlängern / Renew *title* (Button) | | `barcode`, `title`, `author`, `full_title`, `signature`, `library`, `due_date`, `hint`, `renewable`, `renewed_today`, `renewals`, `isbn`, `cover_url` |
 
 Jeder Eintrag im Attribut `loans` hat dieselben Felder wie die Button-Attribute. Die Attributnamen sind englisch.
 
@@ -162,6 +164,6 @@ actions:
 
 ## So funktioniert es
 
-Der Katalog läuft mit aDIS/BMS. Die Integration verhält sich wie ein Nutzer im Browser: Sie meldet sich über das normale Login-Formular an, öffnet die Kontoübersicht und die Ausleihen und meldet sich wieder ab. Zum Verlängern setzt sie genau ein Häkchen und klickt einmal auf „Markierte Medien verlängern“; der neue Stand kommt direkt aus der Antwortseite. Jede Seite hat 10 Sekunden Zeit, es gibt keine automatischen Wiederholungen.
+Der Katalog läuft mit aDIS/BMS. Die Integration verhält sich wie ein Nutzer im Browser: Sie meldet sich über das normale Login-Formular an, öffnet die Kontoübersicht und die Ausleihen und meldet sich wieder ab. Zum Verlängern setzt sie genau ein Häkchen und klickt einmal auf „Markierte Medien verlängern“; der neue Stand kommt direkt aus der Antwortseite. Jede Seite hat 10 Sekunden Zeit, es gibt keine automatischen Wiederholungen. Für die Cover sucht die Integration jedes neue Medium einmal über die erweiterte Suche (zwei Seitenaufrufe pro Medium, höchstens 10 pro Aktualisierung) und speichert das Ergebnis; bereits bekannte Medien werden nicht erneut gesucht.
 
 Ausweisnummer und Passwort liegen im Konfigurationseintrag von Home Assistant und werden nur an `ssl.muenchen.de` gesendet.
