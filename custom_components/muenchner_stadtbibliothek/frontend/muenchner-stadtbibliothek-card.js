@@ -12,7 +12,7 @@
  *   appearance  auto | light | dark (default: auto = theme)
  */
 
-const VERSION = "0.3.3";
+const VERSION = "0.3.4";
 const DOMAIN = "muenchner_stadtbibliothek";
 const CARD_TYPE = "muenchner-stadtbibliothek-card";
 const DEFAULT_LOAN_DAYS = 28;
@@ -159,6 +159,16 @@ const DONE_ICON =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>';
 const RING_RADIUS = 23;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+const RING_STROKE = 6;
+const RING_GAP = 6; // minimum visible gap between the round ends of a partial ring
+
+/** stroke-dasharray for a share of the ring. Round caps add half the stroke at each end, so they are
+ *  subtracted; a nearly full ring keeps a clear gap, a full ring is drawn closed (class "full"). */
+function ringDash(share) {
+  if (share >= 1) return { dash: `${RING_LENGTH.toFixed(1)} 0`, full: true };
+  const length = Math.min(share * RING_LENGTH - RING_STROKE, RING_LENGTH - RING_STROKE - RING_GAP);
+  return { dash: `${Math.max(0.01, length).toFixed(1)} ${RING_LENGTH.toFixed(1)}`, full: false };
+}
 
 /* =====================================================================
  * Card
@@ -296,7 +306,7 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     const hass = this._hass;
     const overdue = loan.days !== null && loan.days < 0;
     const tone = overdue ? "overdue" : loan.days !== null && loan.days <= SOON_DAYS ? "soon" : "normal";
-    const share = overdue ? 1 : Math.max(0.04, Math.min(1, (loan.days ?? 0) / loan.period));
+    const ring = ringDash(overdue ? 1 : Math.max(0, Math.min(1, (loan.days ?? 0) / loan.period)));
     const ringText = overdue ? "!" : loan.days ?? "?";
     const ringLabel =
       loan.days === null ? "" : overdue ? t(hass, "overdue_short") : loan.days === 0 ? t(hass, "today") : loan.days === 1 ? t(hass, "day_left") : t(hass, "days_left", { n: loan.days });
@@ -317,7 +327,7 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     return `<div class="row ${tone}">
       <svg class="ring" viewBox="0 0 56 56" role="img" aria-label="${esc(ringLabel)}">
         <circle class="track" cx="28" cy="28" r="${RING_RADIUS}"></circle>
-        <circle class="bar" cx="28" cy="28" r="${RING_RADIUS}" stroke-dasharray="${(share * RING_LENGTH).toFixed(1)} ${RING_LENGTH.toFixed(1)}" transform="rotate(-90 28 28)"></circle>
+        <circle class="bar${ring.full ? " full" : ""}" cx="28" cy="28" r="${RING_RADIUS}" stroke-dasharray="${ring.dash}" transform="rotate(-90 28 28)"></circle>
         <text x="28" y="33" text-anchor="middle">${esc(ringText)}</text>
       </svg>
       <div class="text">
@@ -372,6 +382,7 @@ ha-card { display:block; box-sizing:border-box; margin:0 auto; padding:16px; col
 .ring { width:56px; height:56px; flex-shrink:0; }
 .ring .track { fill:none; stroke:color-mix(in srgb, var(--primary-text-color) 14%, transparent); stroke-width:6; }
 .ring .bar { fill:none; stroke:var(--lib-tone); stroke-width:6; stroke-linecap:round; }
+.ring .bar.full { stroke-linecap:butt; }
 .ring text { font-size:16px; font-weight:700; fill:var(--lib-tone); font-family:inherit; }
 .row { --lib-tone:var(--secondary-text-color); }
 .row.soon { --lib-tone:var(--warning-color, #ff9800); }
