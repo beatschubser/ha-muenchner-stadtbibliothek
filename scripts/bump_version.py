@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set the version in manifest.json and const.py at once.
+"""Set the version in manifest.json, const.py and the card at once.
 
 Usage: python3 scripts/bump_version.py 2.1.0          (release)
        python3 scripts/bump_version.py 2.1.0-beta.1   (pre-release / test build)
@@ -26,6 +26,7 @@ def main() -> None:
 
     for path, pattern, repl in [
         (BASE / "const.py", r'^VERSION = "[^"]+"', f'VERSION = "{version}"'),
+        (BASE / "frontend" / "muenchner-stadtbibliothek-card.js", r'^const VERSION = "[^"]+";', f'const VERSION = "{version}";'),
     ]:
         text = path.read_text(encoding="utf-8")
         new, count = re.subn(pattern, repl, text, count=1, flags=re.M)

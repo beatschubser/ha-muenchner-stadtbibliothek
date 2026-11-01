@@ -1,23 +1,41 @@
-"""Münchner Stadtbibliothek: library card and loans in Home Assistant."""
+"""Münchner Stadtbibliothek: library card and loans in Home Assistant.
+
+- async_setup (once): serve the dashboard card and add it as dashboard resource.
+- async_setup_entry (per library card): coordinator, sensors, renew buttons.
+"""
 
 from __future__ import annotations
 
 import aiohttp
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.start import async_at_started
+from homeassistant.helpers.typing import ConfigType
 
+from . import frontend_resource
 from .api import LibraryClient
-from .const import CONF_CARD_NUMBER
+from .const import CONF_CARD_NUMBER, DOMAIN
 from .coordinator import LibraryConfigEntry, LibraryCoordinator
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 def create_client(hass: HomeAssistant, card_number: str, password: str) -> LibraryClient:
     """Client with its own cookie jar (the catalog session must not mix with others)."""
     session = async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar())
     return LibraryClient(session, card_number, password)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Serve the card once for all library cards."""
+    if hass.http is not None:
+        await frontend_resource.async_register_view(hass)
+        async_at_started(hass, frontend_resource.async_register_card)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: LibraryConfigEntry) -> bool:
@@ -38,3 +56,9 @@ async def _async_options_updated(hass: HomeAssistant, entry: LibraryConfigEntry)
 async def async_unload_entry(hass: HomeAssistant, entry: LibraryConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Last library card removed: the dashboard resource is no longer needed."""
+    if not any(e.entry_id != entry.entry_id for e in hass.config_entries.async_entries(DOMAIN)):
+        await frontend_resource.async_remove_resource(hass)
