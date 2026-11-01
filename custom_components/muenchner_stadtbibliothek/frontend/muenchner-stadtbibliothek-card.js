@@ -14,7 +14,7 @@
  *   appearance  auto | light | dark (default: auto = theme)
  */
 
-const VERSION = "0.5.1";
+const VERSION = "0.5.2";
 const DOMAIN = "muenchner_stadtbibliothek";
 const CARD_TYPE = "muenchner-stadtbibliothek-card";
 const DEFAULT_LOAN_DAYS = 28;
@@ -310,6 +310,7 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     const hass = this._hass;
     const appearance = APPEARANCES.includes(this._config.appearance) ? this._config.appearance : "auto";
     this._card.className = appearance === "auto" ? "" : `mode-${appearance}`;
+    this._card.lang = hass.locale?.language || hass.language || "de"; // for hyphenation of titles
     const maxWidth = Number(this._config.max_width ?? DEFAULT_MAX_WIDTH);
     this._card.style.maxWidth = maxWidth > 0 ? `${maxWidth}px` : "";
 
@@ -496,7 +497,7 @@ ha-card { display:block; box-sizing:border-box; margin:0 auto; padding:16px; col
 .cover img { display:block; max-width:100%; max-height:100%; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.45); }
 .placeholder { box-sizing:border-box; width:100%; height:100%; border-radius:6px; padding:8px; display:flex; align-items:flex-end;
                background:linear-gradient(160deg, var(--lib-cover) 0%, rgba(0,0,0,.6) 150%); box-shadow:0 2px 8px rgba(0,0,0,.45); color:#fff; }
-.placeholder span { font-size:11px; font-weight:700; line-height:1.15; overflow-wrap:anywhere;
+.placeholder span { font-size:11px; font-weight:700; line-height:1.15; hyphens:auto; -webkit-hyphens:auto; overflow-wrap:break-word;
                     display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 .ring { width:44px; height:44px; flex-shrink:0; }
 .ring .track { fill:none; stroke:color-mix(in srgb, var(--primary-text-color) 14%, transparent); stroke-width:6; }
