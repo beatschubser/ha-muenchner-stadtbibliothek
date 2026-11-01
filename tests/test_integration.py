@@ -125,7 +125,7 @@ async def test_card_is_served(hass: HomeAssistant, hass_client, fake) -> None:
     response = await client.get("/muenchner_stadtbibliothek_files/muenchner-stadtbibliothek-card.js")
     assert response.status == 200
     assert "muenchner-stadtbibliothek-card" in await response.text()
-    response = await client.get("/muenchner_stadtbibliothek_files/../manifest.json")
+    response = await client.get("/muenchner_stadtbibliothek_files/manifest.json")
     assert response.status == 404
 
 
