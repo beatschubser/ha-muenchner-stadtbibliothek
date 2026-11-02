@@ -68,11 +68,11 @@ Jede Ausleihe zeigt das Cover, die Resttage als Ring (orange ab 3 Tagen, rot wen
 | Entität (deutscher / englischer Name) | Zustand | Attribute |
 | --- | --- | --- |
 | Ausweis gültig bis / Card valid until | Datum | |
-| Ausleihen / Loans | Anzahl der Ausleihen | `loans` (Liste), `renewable`, `card_valid_until`, `last_update` |
-| Nächste Fälligkeit / Next due date | Datum | `count`, `titles`, `renewable` |
-| *Titel* verlängern / Renew *title* (Button) | | `barcode`, `title`, `author`, `full_title`, `signature`, `library`, `due_date`, `hint`, `renewable`, `renewed_today`, `renewals`, `isbn`, `cover_url` |
+| Ausleihen / Loans | Anzahl der Ausleihen | `loans` (alle Ausleihen mit allen Angaben, siehe unten), `renewable_count`, `last_update` |
+| Nächste Fälligkeit / Next due date | Datum | `count`, `titles`, `all_renewable` |
+| *Titel* verlängern / Renew *title* (Button, einer pro Ausleihe) | | `barcode`, `title`, `due_date`, `renewable`, `renewed_today` |
 
-Jeder Eintrag im Attribut `loans` hat dieselben Felder wie die Button-Attribute. Die Attributnamen sind englisch.
+Felder eines Eintrags in `loans`: `barcode` (Mediennummer), `title`, `author`, `full_title` (Titelzeile wie im Katalog), `signature`, `library`, `due_date`, `hint` (Hinweis aus dem Katalog), `renewable`, `renewed_today`, `renewals`, `isbn`, `cover_url`. Die Buttons tragen nur das, was eine Ausleihe kennzeichnet und für Automationen gebraucht wird; über `barcode` gehören Button und Eintrag zusammen. Die Attributnamen sind englisch.
 
 ## Beispiele
 
@@ -117,8 +117,12 @@ actions:
               {% if parts.list %}
                 {% set sentences.list = [parts.list | join(', ') ~ '.'] %}
               {% endif %}
-              {% set valid = state_attr(repeat.item, 'card_valid_until') %}
-              {% if valid %}
+              {% set valid = expand(device_entities(device_id(repeat.item)))
+                 | selectattr('domain', 'eq', 'sensor')
+                 | selectattr('attributes.device_class', 'eq', 'date')
+                 | rejectattr('attributes.count', 'defined')
+                 | map(attribute='state') | first | default('') %}
+              {% if valid and valid not in ['unknown', 'unavailable'] %}
                 {% set left = (strptime(valid, '%Y-%m-%d').date() - now().date()).days %}
                 {% if left in card_days_ahead %}
                   {% set sentences.list = sentences.list + ['Der Ausweis läuft in ' ~ left ~ ' Tagen ab.'] %}

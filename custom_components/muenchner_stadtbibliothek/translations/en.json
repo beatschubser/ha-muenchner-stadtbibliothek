@@ -58,11 +58,8 @@
           "loans": {
             "name": "Loans"
           },
-          "renewable": {
-            "name": "Renewable"
-          },
-          "card_valid_until": {
-            "name": "Card valid until"
+          "renewable_count": {
+            "name": "Renewable items"
           },
           "last_update": {
             "name": "Last update"
@@ -78,7 +75,7 @@
           "titles": {
             "name": "Titles"
           },
-          "renewable": {
+          "all_renewable": {
             "name": "All renewable"
           }
         }

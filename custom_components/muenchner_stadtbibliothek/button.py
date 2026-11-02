@@ -16,6 +16,7 @@ from .entity import LibraryEntity
 from .parser import Loan
 
 KEY_PREFIX = "renew_"
+BUTTON_ATTRIBUTES = ("barcode", "title", "due_date", "renewable", "renewed_today")
 
 
 async def async_setup_entry(
@@ -52,7 +53,7 @@ class RenewButton(LibraryEntity, ButtonEntity):
     """Renews one loan."""
 
     _attr_translation_key = "renew"
-    _unrecorded_attributes = frozenset({"title", "author", "full_title", "signature", "hint"})
+    _unrecorded_attributes = frozenset({"title"})
 
     def __init__(self, coordinator: LibraryCoordinator, loan: Loan) -> None:
         super().__init__(coordinator, f"{KEY_PREFIX}{loan.barcode}")
@@ -69,8 +70,12 @@ class RenewButton(LibraryEntity, ButtonEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
+        # only what identifies the item and drives automations; all details are in the loans sensor
         loan = self._loan
-        return loan.as_dict() if loan else None
+        if loan is None:
+            return None
+        data = loan.as_dict()
+        return {key: data[key] for key in BUTTON_ATTRIBUTES}
 
     async def async_press(self) -> None:
         loan = self._loan

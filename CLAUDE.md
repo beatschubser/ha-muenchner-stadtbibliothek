@@ -43,6 +43,7 @@ scripts/release_notes.py  release notes from commit subjects
 - No permanent session: every update and every renewal is one short session, to keep traffic low. Default interval 4 h.
 - Buttons of loans that are not renewable stay available and raise an error with the hint, without a request to the catalog.
 - Attribute names are English; page texts in const.py are German because the catalog is German only.
+- Attribute structure (wish of the maintainer: logical, everything else follows it): the loans sensor holds all data (`loans` list with every field, `renewable_count`, `last_update`); next due date: `count`, `titles`, `all_renewable`; renew buttons only `barcode`, `title`, `due_date`, `renewable`, `renewed_today` (button.BUTTON_ATTRIBUTES). No copies of other sensors' states as attributes; automations find the card validity sensor via `device_entities` (date sensor without `count`).
 - README and repository description are German (integration for Munich only); code comments, commit subjects and release notes stay English.
 
 ## Card (design approved by the maintainer: "D2" cover + ring, mockups on the design canvas)
@@ -53,7 +54,7 @@ scripts/release_notes.py  release notes from commit subjects
 - Accounts = devices of the integration with a loans sensor (found via `hass.entities`, `translation_key`); name = device `name_by_user || name` (device name = entry title from the setup field "Name"). Several accounts: pills like in Sleek School Schedule (active one kept per card instance); option `account` (name, case-insensitive, or the loans entity id; the 0.2.0 option `entity` still works) fixes one account and shows `title ?? name`.
 - The card finds the buttons by `barcode` attribute among the account's entities, the validity sensor by `translation_key`.
 - `max_width` (default 640 px, 0 = full width) limits and centers ha-card, e.g. in Bubble Card pop-ups.
-- Card validity warning: `card_warn_days` (default 30) orange "· noch N Tage"; <= 7 days or expired red plus a banner above the loans; shown even with `show_card: false`; pills get a dot. The loans sensor also carries `card_valid_until` for automations.
+- Card validity warning: `card_warn_days` (default 30) orange "· noch N Tage"; <= 7 days or expired red plus a banner above the loans; shown even with `show_card: false`; pills get a dot.
 - Options only differ from defaults are stored; the editor keeps all other keys (grid_options etc.).
 - For UI changes: render tests with Playwright (mock hass with `entities`/`states`/`callService`, ha-card stub) in light, dark and narrow.
 

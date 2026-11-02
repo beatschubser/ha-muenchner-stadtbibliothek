@@ -29,9 +29,7 @@ def _next_due(data: AccountData) -> date | None:
 def _loans_attributes(data: AccountData) -> dict[str, Any]:
     return {
         "loans": [loan.as_dict() for loan in sorted(data.loans, key=lambda l: (l.due_date or date.max, l.title))],
-        "renewable": sum(1 for loan in data.loans if loan.renewable),
-        # also here so automations find the expiry of the card next to its loans
-        "card_valid_until": data.card_valid_until.isoformat() if data.card_valid_until else None,
+        "renewable_count": sum(1 for loan in data.loans if loan.renewable),
         "last_update": data.updated.isoformat(timespec="seconds"),
     }
 
@@ -42,7 +40,7 @@ def _next_due_attributes(data: AccountData) -> dict[str, Any]:
     return {
         "count": len(items),
         "titles": [loan.title for loan in items],
-        "renewable": all(loan.renewable for loan in items) if items else None,
+        "all_renewable": all(loan.renewable for loan in items) if items else None,
     }
 
 

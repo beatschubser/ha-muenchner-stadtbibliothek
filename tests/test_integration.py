@@ -84,8 +84,7 @@ async def test_sensors_and_buttons(hass: HomeAssistant, fake) -> None:
     assert hass.states.get(ids["next_due_date"]).state == "2030-03-16"
     loans = hass.states.get(ids["loans"])
     assert loans.state == "3"
-    assert loans.attributes["renewable"] == 2
-    assert loans.attributes["card_valid_until"] == "2030-12-31"
+    assert loans.attributes["renewable_count"] == 2
     assert loans.attributes["loans"][0]["title"] == "Der kleine Testdrache"
     # cover lookup: unique hit for the first item, none for the others; every item searched once
     first = loans.attributes["loans"][0]
@@ -102,6 +101,8 @@ async def test_sensors_and_buttons(hass: HomeAssistant, fake) -> None:
     state = hass.states.get(buttons["00000100000001"])
     assert state.attributes["due_date"] == "2030-03-16"
     assert state.attributes["renewable"] is True
+    assert set(state.attributes) >= {"barcode", "title", "due_date", "renewable", "renewed_today"}
+    assert "isbn" not in state.attributes and "hint" not in state.attributes, "details only in the loans sensor"
 
 
 async def test_renew(hass: HomeAssistant, fake) -> None:

@@ -58,11 +58,8 @@
           "loans": {
             "name": "Ausleihen"
           },
-          "renewable": {
-            "name": "Verlängerbar"
-          },
-          "card_valid_until": {
-            "name": "Ausweis gültig bis"
+          "renewable_count": {
+            "name": "Verlängerbare Medien"
           },
           "last_update": {
             "name": "Letzte Aktualisierung"
@@ -78,7 +75,7 @@
           "titles": {
             "name": "Titel"
           },
-          "renewable": {
+          "all_renewable": {
             "name": "Alle verlängerbar"
           }
         }
