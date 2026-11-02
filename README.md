@@ -156,7 +156,7 @@ actions:
               - action: "{{ repeat.item }}"
                 data:
                   title: Bibliothek
-                  message: "Ausweis {{ card_name }}: {{ message }}"
+                  message: "{{ card_name }}: {{ message }}"
 mode: single
 ```
 
