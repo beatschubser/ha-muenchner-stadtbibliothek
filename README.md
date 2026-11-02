@@ -23,13 +23,9 @@
 ## Funktionen
 
 - **Ausweis gültig bis** als Datumssensor.
-- **Ausleihen** mit Fälligkeit, Bibliothek, Titel, Autor, Signatur, Mediennummer und dem Hinweis aus dem Katalog (z. B. „verlängerbar“, „Heute verlängert“).
 - **Nächste Fälligkeit** mit den Titeln, die an diesem Tag fällig sind.
-- **Ein Verlängern-Button pro Ausleihe.** Die Buttons erscheinen und verschwinden mit den Ausleihen. Nicht verlängerbare Medien werden gar nicht erst an den Katalog geschickt, der Button zeigt stattdessen den Grund.
 - **Eigene Dashboard-Karte** mit Cover, Resttagen, Verlängern-Button und Auswahl zwischen mehreren Ausweisen.
-- **Cover:** Jedes neue Medium wird einmal im Katalog gesucht (Titel, Signatur, Bibliothek). Bei einem eindeutigen Treffer lädt die Integration das Cover einmalig mit der Titelanzeige, speichert es in Home Assistant und liefert es von dort aus. Danach gehen für Cover keine Anfragen mehr an die Bibliothek. Abschaltbar unter **Konfigurieren**.
 - Mehrere Ausweise (z. B. einer pro Familienmitglied), jeder als eigenes Gerät mit eigenem Namen.
-- Wenig Verkehr: Jede Aktualisierung ist eine kurze Katalog-Sitzung (Anmelden, Übersicht, Ausleihen, Abmelden), ohne Wiederholungen. Standardintervall 4 Stunden, einstellbar von 1 bis 48 Stunden.
 
 ## Installation
 
