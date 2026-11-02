@@ -14,7 +14,7 @@
  *   appearance  auto | light | dark (default: auto = theme)
  */
 
-const VERSION = "0.6.1";
+const VERSION = "0.7.0";
 const DOMAIN = "muenchner_stadtbibliothek";
 const CARD_TYPE = "muenchner-stadtbibliothek-card";
 const DEFAULT_LOAN_DAYS = 28;
@@ -283,10 +283,10 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     return [parts.join(","), names, language(hass), new Date().toDateString()].join("|");
   }
 
-  /** Accounts this card shows: one fixed account (option account, or entity of 0.2.0) or all. */
+  /** Accounts this card shows: one fixed account (option account) or all. */
   _accounts() {
     const all = findAccounts(this._hass);
-    const wanted = this._config.account || this._config.entity;
+    const wanted = this._config.account;
     return wanted ? all.filter((a) => matchAccount(a, wanted)) : all;
   }
 
@@ -299,8 +299,7 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
       .map((loan) => {
         const due = parseDate(loan.due_date);
         const days = due ? daysUntil(due) : null;
-        const renewedToday = loan.renewed_today ?? String(loan.hint || "").startsWith("Heute verlängert");
-        return { ...loan, due, days, renewedToday, period };
+        return { ...loan, due, days, renewedToday: loan.renewed_today === true, period };
       })
       .sort((a, b) => (a.days ?? 9999) - (b.days ?? 9999) || String(a.title).localeCompare(String(b.title)));
   }
@@ -317,7 +316,7 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     const accounts = this._accounts();
     if (!accounts.length) {
       this._size = 2;
-      const wanted = this._config.account || this._config.entity;
+      const wanted = this._config.account;
       this._card.innerHTML = `<div class="message">${esc(wanted ? t(hass, "account_not_found", { name: wanted }) : t(hass, "no_entity"))}</div>`;
       return;
     }
@@ -574,7 +573,7 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
       },
     ];
     // The title is only shown for a single account; with several accounts the pills are the heading
-    if (this._config.account || this._config.entity || accounts.length <= 1) fields.push({ name: "title", selector: { text: {} } });
+    if (this._config.account || accounts.length <= 1) fields.push({ name: "title", selector: { text: {} } });
     fields.push(
       {
         type: "grid",
@@ -597,7 +596,7 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
   }
 
   _accountValue() {
-    const wanted = this._config.account || this._config.entity;
+    const wanted = this._config.account;
     if (!wanted) return ALL;
     return findAccounts(this._hass).find((a) => matchAccount(a, wanted))?.name || wanted;
   }
@@ -628,7 +627,6 @@ class MuenchnerStadtbibliothekCardEditor extends HTMLElement {
   /** Only options that differ from the defaults are stored; unknown options (grid_options, ...) are kept. */
   _changed(value) {
     const config = { ...this._config, type: this._config.type || `custom:${CARD_TYPE}` };
-    delete config.entity; // replaced by account (name)
     if (value.account && value.account !== ALL) config.account = value.account;
     else delete config.account;
     if (value.title) config.title = value.title;

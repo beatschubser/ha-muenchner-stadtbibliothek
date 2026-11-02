@@ -68,11 +68,28 @@ Jede Ausleihe zeigt das Cover, die Resttage als Ring (orange ab 3 Tagen, rot wen
 | Entität (deutscher / englischer Name) | Zustand | Attribute |
 | --- | --- | --- |
 | Ausweis gültig bis / Card valid until | Datum | |
-| Ausleihen / Loans | Anzahl der Ausleihen | `loans` (alle Ausleihen mit allen Angaben, siehe unten), `renewable_count`, `last_update` |
+| Ausleihen / Loans | Anzahl der Ausleihen | `loans` (alle Ausleihen mit allen Angaben, siehe unten), `renewable_count`, `fetched_at` (letzter Abruf aus dem Katalog) |
 | Nächste Fälligkeit / Next due date | Datum | `count`, `titles` |
 | *Titel* verlängern / Renew *title* (Button, einer pro Ausleihe) | | `barcode`, `title`, `due_date`, `renewable`, `renewed_today` |
 
-Felder eines Eintrags in `loans`: `barcode` (Mediennummer), `title`, `author`, `full_title` (Titelzeile wie im Katalog), `signature`, `library`, `due_date`, `hint` (Hinweis aus dem Katalog), `renewable`, `renewed_today`, `renewals`, `isbn`, `cover_url`. Die Buttons tragen nur das, was eine Ausleihe kennzeichnet und für Automationen gebraucht wird; über `barcode` gehören Button und Eintrag zusammen. Die Attributnamen sind englisch.
+Felder eines Eintrags in `loans`:
+
+| Feld | Inhalt |
+| --- | --- |
+| `barcode` | Mediennummer, verbindet Eintrag und Button |
+| `title` | Titel |
+| `author` | Verfasserangabe aus dem Katalog (Teil hinter „/“), nicht immer nur ein Name, z. B. „frei erzählt nach …“ |
+| `full_title` | Titelzeile wie im Katalog |
+| `shelf_mark` | Signatur |
+| `library` | Bibliothek |
+| `due_date` | Fälligkeit (`JJJJ-MM-TT`) |
+| `hint` | Spalte „Hinweis“ aus dem Katalog |
+| `renewable` | verlängerbar |
+| `renewed_today` | heute verlängert |
+| `isbn` | ISBN-13/EAN, wenn die Cover-Suche einen eindeutigen Treffer hatte |
+| `cover_url` | Cover, in Home Assistant gespeichert |
+
+Die Buttons tragen nur das, was eine Ausleihe kennzeichnet und für Automationen gebraucht wird. Die Attributnamen sind englisch.
 
 ## Beispiele
 

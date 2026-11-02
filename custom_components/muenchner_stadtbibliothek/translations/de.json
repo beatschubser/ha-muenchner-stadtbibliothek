@@ -61,8 +61,8 @@
           "renewable_count": {
             "name": "Verlängerbare Medien"
           },
-          "last_update": {
-            "name": "Letzte Aktualisierung"
+          "fetched_at": {
+            "name": "Abgerufen am"
           }
         }
       },

@@ -16,9 +16,9 @@ from homeassistant.components.sensor import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .api import AccountData
 from .coordinator import LibraryConfigEntry, LibraryCoordinator
 from .entity import LibraryEntity
+from .models import AccountData
 
 
 def _next_due(data: AccountData) -> date | None:
@@ -30,7 +30,7 @@ def _loans_attributes(data: AccountData) -> dict[str, Any]:
     return {
         "loans": [loan.as_dict() for loan in sorted(data.loans, key=lambda l: (l.due_date or date.max, l.title))],
         "renewable_count": sum(1 for loan in data.loans if loan.renewable),
-        "last_update": data.updated.isoformat(timespec="seconds"),
+        "fetched_at": data.fetched_at.isoformat(timespec="seconds"),
     }
 
 
@@ -88,7 +88,7 @@ class LibrarySensor(LibraryEntity, SensorEntity):
     """One value of the account."""
 
     entity_description: LibrarySensorDescription
-    _unrecorded_attributes = frozenset({"loans", "titles", "last_update"})
+    _unrecorded_attributes = frozenset({"loans", "titles", "fetched_at"})
 
     def __init__(self, coordinator: LibraryCoordinator, description: LibrarySensorDescription) -> None:
         super().__init__(coordinator, description.key)

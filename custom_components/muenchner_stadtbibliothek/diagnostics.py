@@ -12,6 +12,8 @@ from .const import CONF_CARD_NUMBER, VERSION
 from .coordinator import LibraryConfigEntry
 
 TO_REDACT = {CONF_CARD_NUMBER, CONF_PASSWORD, "unique_id", "title"}
+# per loan only what helps with bug reports, nothing that identifies a title
+LOAN_FIELDS = ("due_date", "library", "hint", "renewable", "renewed_today")
 
 
 async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: LibraryConfigEntry) -> dict[str, Any]:
@@ -23,7 +25,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Library
         "last_update_success": coordinator.last_update_success,
         "card_valid_until": data.card_valid_until.isoformat() if data and data.card_valid_until else None,
         "loans": [
-            {key: value for key, value in loan.as_dict().items() if key in ("due_date", "library", "hint", "renewable", "renewals")}
+            {key: value for key, value in loan.as_dict().items() if key in LOAN_FIELDS} | {"cover": bool(loan.cover_url)}
             for loan in (data.loans if data else [])
         ],
     }

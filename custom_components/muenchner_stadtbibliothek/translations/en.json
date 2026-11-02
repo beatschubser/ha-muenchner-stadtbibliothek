@@ -61,8 +61,8 @@
           "renewable_count": {
             "name": "Renewable items"
           },
-          "last_update": {
-            "name": "Last update"
+          "fetched_at": {
+            "name": "Fetched at"
           }
         }
       },
