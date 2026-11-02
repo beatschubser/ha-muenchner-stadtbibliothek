@@ -69,7 +69,7 @@ Jede Ausleihe zeigt das Cover, die Resttage als Ring (orange ab 3 Tagen, rot wen
 | --- | --- | --- |
 | Ausweis gültig bis / Card valid until | Datum | |
 | Ausleihen / Loans | Anzahl der Ausleihen | `loans` (alle Ausleihen mit allen Angaben, siehe unten), `renewable_count`, `last_update` |
-| Nächste Fälligkeit / Next due date | Datum | `count`, `titles`, `all_renewable` |
+| Nächste Fälligkeit / Next due date | Datum | `count`, `titles` |
 | *Titel* verlängern / Renew *title* (Button, einer pro Ausleihe) | | `barcode`, `title`, `due_date`, `renewable`, `renewed_today` |
 
 Felder eines Eintrags in `loans`: `barcode` (Mediennummer), `title`, `author`, `full_title` (Titelzeile wie im Katalog), `signature`, `library`, `due_date`, `hint` (Hinweis aus dem Katalog), `renewable`, `renewed_today`, `renewals`, `isbn`, `cover_url`. Die Buttons tragen nur das, was eine Ausleihe kennzeichnet und für Automationen gebraucht wird; über `barcode` gehören Button und Eintrag zusammen. Die Attributnamen sind englisch.

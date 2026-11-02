@@ -40,7 +40,6 @@ def _next_due_attributes(data: AccountData) -> dict[str, Any]:
     return {
         "count": len(items),
         "titles": [loan.title for loan in items],
-        "all_renewable": all(loan.renewable for loan in items) if items else None,
     }
 
 

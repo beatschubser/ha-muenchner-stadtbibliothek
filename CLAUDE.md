@@ -43,7 +43,7 @@ scripts/release_notes.py  release notes from commit subjects
 - No permanent session: every update and every renewal is one short session, to keep traffic low. Default interval 4 h.
 - Buttons of loans that are not renewable stay available and raise an error with the hint, without a request to the catalog.
 - Attribute names are English; page texts in const.py are German because the catalog is German only.
-- Attribute structure (wish of the maintainer: logical, everything else follows it): the loans sensor holds all data (`loans` list with every field, `renewable_count`, `last_update`); next due date: `count`, `titles`, `all_renewable`; renew buttons only `barcode`, `title`, `due_date`, `renewable`, `renewed_today` (button.BUTTON_ATTRIBUTES). No copies of other sensors' states as attributes; automations find the card validity sensor via `device_entities` (date sensor without `count`).
+- Attribute structure (wish of the maintainer: logical, everything else follows it): the loans sensor holds all data (`loans` list with every field, `renewable_count`, `last_update`); next due date: `count`, `titles` (`count` also tells automations this sensor apart from the card validity); renew buttons only `barcode`, `title`, `due_date`, `renewable`, `renewed_today` (button.BUTTON_ATTRIBUTES). No copies of other sensors' states as attributes; automations find the card validity sensor via `device_entities` (date sensor without `count`).
 - README and repository description are German (integration for Munich only); code comments, commit subjects and release notes stay English.
 
 ## Card (design approved by the maintainer: "D2" cover + ring, mockups on the design canvas)
