@@ -14,11 +14,8 @@
   <a href="https://github.com/beatschubser/ha-muenchner-stadtbibliothek/actions/workflows/validate.yml"><img src="https://github.com/beatschubser/ha-muenchner-stadtbibliothek/actions/workflows/validate.yml/badge.svg" alt="Validate"></a>
 </p>
 
-> [!WARNING]
-> **In Entwicklung.** Inoffizielle Integration, kein Angebot der Münchner Stadtbibliothek. Sie liest die Kontoseiten des Online-Katalogs. Ändert die Bibliothek diese Seiten, funktioniert die Integration möglicherweise erst nach einem Update wieder.
-
 > [!NOTE]
-> Der Code ist zu 100 % KI-generiert.
+> Inoffizielle Integration, kein Angebot der Münchner Stadtbibliothek. Der Code ist zu 100 % KI-generiert.
 
 <p align="center"><img src="assets/tablet-card.png" width="520" alt="Dashboard-Karte mit Ausleihen auf einem Tablet"></p>
 
