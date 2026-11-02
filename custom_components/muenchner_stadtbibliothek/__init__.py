@@ -18,8 +18,8 @@ from homeassistant.helpers.typing import ConfigType
 
 from . import frontend_resource
 from .api import LibraryClient
-from .const import CONF_CARD_NUMBER, DOMAIN
-from .coordinator import LibraryConfigEntry, LibraryCoordinator
+from .const import CONF_CARD_NUMBER, DOMAIN, LOOKUP_STORE_KEY
+from .coordinator import STORAGE_VERSION, LibraryConfigEntry, LibraryCoordinator
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -43,7 +43,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LibraryConfigEntry) -> b
     """Set up one library card."""
     client = create_client(hass, entry.data[CONF_CARD_NUMBER], entry.data[CONF_PASSWORD])
     coordinator = LibraryCoordinator(hass, entry, client)
-    await coordinator.async_load_isbns()
+    await coordinator.async_load_lookups()
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -61,7 +61,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: LibraryConfigEntry) -> 
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Remove the stored lookup results; after the last library card also the dashboard resource."""
-    await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.isbn").async_remove()
+    """Remove the stored cover lookups; after the last library card also the dashboard resource."""
+    await Store(hass, STORAGE_VERSION, LOOKUP_STORE_KEY.format(entry_id=entry.entry_id)).async_remove()
     if not any(e.entry_id != entry.entry_id for e in hass.config_entries.async_entries(DOMAIN)):
         await frontend_resource.async_remove_resource(hass)

@@ -32,7 +32,7 @@ FIELDS = ["", "ISBN, ISSN, ISMN", "Person", "Signatur", "Titel"]
 class FakeLoan:
     barcode: str
     title: str
-    signature: str
+    shelf_mark: str
     due: date
     hint_lines: list[str]
 
@@ -109,7 +109,7 @@ class FakeAdis:
                 rows.append(
                     f'<tr><td><input type="checkbox" name="$RTable_checkbox[]" value="{value}" id="{value}"></td>'
                     f"<td>{loan.due:%d.%m.%Y}</td><td>Testbibliothek</td>"
-                    f"<td>{html.escape(loan.title)}<br>{loan.signature}<br>{loan.barcode}</td>"
+                    f"<td>{html.escape(loan.title)}<br>{loan.shelf_mark}<br>{loan.barcode}</td>"
                     f"<td>{'<br>'.join(loan.hint_lines)}</td></tr>"
                 )
             body = f"""<p>{self.message}</p><table class="rTable_table" id="resptable-1"><thead><tr>
@@ -220,11 +220,11 @@ class FakeAdis:
             assert first("$Select$0") == "Titel" and first("$Select$1") == "UND", form
             assert first("$Autosuggest") == "", "old search terms must not be sent again"
             title = first("$Autosuggest$0")
-            signature = first("$Autosuggest$1") if first("$Select$2") == "Signatur" else ""
+            shelf_mark = first("$Autosuggest$1") if first("$Select$2") == "Signatur" else ""
             library = first("$Select")
-            self.searches.append((title, signature, library))
-            self.hits = RECORDS.get((title, signature, library), [])
-            self.last_terms = (title, signature)
+            self.searches.append((title, shelf_mark, library))
+            self.hits = RECORDS.get((title, shelf_mark, library), [])
+            self.last_terms = (title, shelf_mark)
             # like the real catalog: one hit -> record, several -> list, none -> the form again (terms kept)
             self.view = "record" if len(self.hits) == 1 else "results" if self.hits else "advanced"
         elif "Markierte Medien verlängern" in form.get("$Button$2", []):

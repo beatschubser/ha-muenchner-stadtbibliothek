@@ -141,7 +141,6 @@ async def test_returned_loan_removes_button(hass: HomeAssistant, fake) -> None:
 
 async def test_card_is_served(hass: HomeAssistant, hass_client, fake) -> None:
     entry = await _setup(hass)
-    await hass.async_add_executor_job(lambda: None)
     assert entry.runtime_data.data.loans[0].cover_url
     client = await hass_client()
     response = await client.get("/muenchner_stadtbibliothek_files/muenchner-stadtbibliothek-card.js")

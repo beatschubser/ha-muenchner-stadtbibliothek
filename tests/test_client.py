@@ -24,7 +24,7 @@ except ImportError:  # the client only needs ClientTimeout and ClientError from 
 
 BASE = Path(__file__).resolve().parent.parent / "custom_components" / "muenchner_stadtbibliothek"
 
-# Load const.py, parser.py and api.py as a package without importing Home Assistant
+# Load const.py, models.py, parser.py and api.py as a package without importing Home Assistant
 _pkg = types.ModuleType("msb")
 _pkg.__path__ = [str(BASE)]
 sys.modules["msb"] = _pkg
@@ -39,6 +39,7 @@ def _load(name):
 
 
 const = _load("const")
+models = _load("models")
 parser = _load("parser")
 api = _load("api")
 
@@ -65,7 +66,7 @@ def test_parse_loans_and_links():
     first = loans[0]
     assert first.title == "Der kleine Testdrache"
     assert first.author == "Erika Beispiel"
-    assert first.signature == "k BEI"
+    assert first.shelf_mark == "k BEI"
     assert first.library == "Testbibliothek"
     assert first.due_date == date(2030, 3, 16)
     assert first.renewable is True
@@ -81,8 +82,7 @@ def test_renewed_hint():
     loan = parser.parse_loans(parser.parse_page(fake.render(), "https://x/"))[0]
     assert loan.hint == "Heute verlängert, 1 Verlängerung"
     assert loan.renewable is False
-    assert loan.renewals == 1
-    assert parser.renewed_today(loan)
+    assert loan.renewed_today
     assert loan.as_dict()["renewed_today"] is True
 
 
@@ -96,8 +96,10 @@ def test_overview_without_loans():
 def test_login_button_english_page():
     html = """<form action="logincheck"><input type="text" name="L#AUSW"><input type="password" name="LPASSW">
 <input type="submit" name="LLOGIN" value="Login"><input type="submit" name="LCANCL" value="Cancel"></form>"""
-    assert parser.login_submit_button(html, "LLOGIN", "Anmelden") == ("LLOGIN", "Login")
-    assert parser.login_submit_button(html, "XLOGIN", "Login") == ("LLOGIN", "Login")
+    page = parser.parse_page(html, "https://x/oidcp/authorize")
+    assert parser.is_login_page(page)
+    assert parser.login_submit_button(page, "LLOGIN", "Anmelden") == ("LLOGIN", "Login")
+    assert parser.login_submit_button(page, "XLOGIN", "Login") == ("LLOGIN", "Login")
 
 
 # ---- client ------------------------------------------------------------------
@@ -207,7 +209,7 @@ def test_renew():
     fake = FakeAdis()
     result = run(fake, lambda c: c.async_renew("00000100000002"))
     assert result.loan.due_date == date(2030, 3, 30)
-    assert result.loan.renewals == 1
+    assert result.loan.renewed_today
     assert result.account.loans[-1].barcode == "00000100000002"
     assert result.message.startswith("Sie haben versucht")
     assert fake.renew_posts == 1

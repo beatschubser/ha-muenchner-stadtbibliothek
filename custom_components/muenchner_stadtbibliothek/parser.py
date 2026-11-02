@@ -8,7 +8,7 @@ form with selected="ZTEXT       <code>"; buttons submit it with their own name.
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import date
 from urllib.parse import urljoin
 
@@ -21,45 +21,17 @@ from .const import (
     COLUMN_LIBRARY,
     COLUMN_TITLE,
     HINT_RENEWABLE,
-    HINT_RENEWED_TODAY,
     LINK_LOANS_PATTERN,
     TERM_CARD_VALID,
 )
+from .models import Loan
 
 # Prefix aDIS puts in front of a link code (htmlOnLink in aDISMain.js)
 LINK_PREFIX = "ZTEXT       "
 
 _FN_RE = re.compile(r"function\s+(fn\d+)\s*\(e\)\s*\{[^}]*?htmlOnLink\(\s*[\"']([^\"']+)[\"']\s*\)")
 _BIND_RE = re.compile(r"getElementById\(\s*[\"'](idfn\d+)[\"']\s*\)\??\.addEventListener\(\s*[\"']click[\"']\s*,\s*(fn\d+)")
-_RENEWALS_RE = re.compile(r"(\d+)\s+Verlängerung")
 _DATE_RE = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{4})")
-
-
-@dataclass
-class Loan:
-    """One borrowed item."""
-
-    barcode: str
-    title: str
-    author: str | None
-    full_title: str
-    signature: str | None
-    library: str
-    due_date: date | None
-    hint: str
-    renewable: bool
-    renewals: int | None
-    checkbox: str | None = None  # value of the row checkbox, only valid for the page it came from
-    isbn: str | None = None  # ISBN-13/EAN from the catalog record, looked up once per item
-    cover_url: str | None = None  # cover stored in Home Assistant (local URL), set by the coordinator
-
-    def as_dict(self) -> dict:
-        """Attributes for Home Assistant (dates as ISO strings, no page specific data)."""
-        data = asdict(self)
-        data.pop("checkbox")
-        data["due_date"] = self.due_date.isoformat() if self.due_date else None
-        data["renewed_today"] = renewed_today(self)
-        return data
 
 
 @dataclass
@@ -143,40 +115,44 @@ def loans_link(page: AdisPage) -> tuple[str | None, int]:
     return None, 0
 
 
-def is_login_page(html: str) -> bool:
+# ---- login page (OpenID Connect form, not an aDIS page) ----------------------------
+
+
+def _password_input(page: AdisPage) -> Tag | None:
+    return page.soup.find("input", attrs={"type": "password"}) if page.soup else None
+
+
+def is_login_page(page: AdisPage) -> bool:
     """True if the page contains a password field (login form)."""
-    soup = BeautifulSoup(html, "html.parser")
-    return soup.find("input", attrs={"type": "password"}) is not None
+    return _password_input(page) is not None
 
 
-def parse_login_form(html: str, url: str) -> tuple[str, dict[str, str], str, str] | None:
-    """Action, base fields, user field and password field of the login form."""
-    soup = BeautifulSoup(html, "html.parser")
-    password = soup.find("input", attrs={"type": "password"})
-    if password is None:
-        return None
-    form = password.find_parent("form")
+def parse_login_form(page: AdisPage) -> tuple[str, dict[str, str], str, str] | None:
+    """Action, hidden fields, user field and password field of the login form."""
+    password = _password_input(page)
+    form = password.find_parent("form") if password else None
     if form is None:
         return None
-    fields: dict[str, str] = {}
+    hidden: dict[str, str] = {}
     user_field = None
     for inp in form.find_all("input"):
         name, kind = inp.get("name"), (inp.get("type") or "text").lower()
         if not name:
             continue
         if kind == "hidden":
-            fields[name] = inp.get("value", "")
+            hidden[name] = inp.get("value", "")
         elif kind in ("text", "tel", "number", "email") and user_field is None:
             user_field = name
     if user_field is None:
         return None
-    return urljoin(url, form.get("action") or url), fields, user_field, password["name"]
+    return urljoin(page.url, form.get("action") or page.url), hidden, user_field, password["name"]
 
 
-def login_submit_button(html: str, name: str, label: str) -> tuple[str, str] | None:
+def login_submit_button(page: AdisPage, name: str, label: str) -> tuple[str, str] | None:
     """Name and value of the login button, by field name first (the label depends on the language)."""
-    soup = BeautifulSoup(html, "html.parser")
-    buttons = [b for b in soup.find_all("input", attrs={"type": "submit"}) if b.get("name")]
+    if page.soup is None:
+        return None
+    buttons = [b for b in page.soup.find_all("input", attrs={"type": "submit"}) if b.get("name")]
     for button in buttons:
         if button["name"] == name:
             return button["name"], button.get("value", "")
@@ -186,14 +162,18 @@ def login_submit_button(html: str, name: str, label: str) -> tuple[str, str] | N
     return None
 
 
-def login_error(html: str) -> str | None:
+def login_error(page: AdisPage) -> str | None:
     """Error message shown on the login page, if any."""
-    soup = BeautifulSoup(html, "html.parser")
+    if page.soup is None:
+        return None
     for selector in (".error", ".alert", ".fehler", "[role=alert]", ".message"):
-        tag = soup.select_one(selector)
+        tag = page.soup.select_one(selector)
         if tag and _text(tag):
             return _text(tag)
     return None
+
+
+# ---- account pages -------------------------------------------------------------
 
 
 def parse_card_valid_until(page: AdisPage) -> date | None:
@@ -247,10 +227,9 @@ def parse_loans(page: AdisPage) -> list[Loan]:
             continue
         full_title = title_lines[0]
         barcode = next((line for line in reversed(title_lines[1:]) if re.fullmatch(r"\d{6,}", line)), None)
-        signature = next((line for line in title_lines[1:] if line != barcode), None)
+        shelf_mark = next((line for line in title_lines[1:] if line != barcode), None)
         hint_lines = _lines(cells[index[COLUMN_HINT]]) if COLUMN_HINT in index else []
         hint = ", ".join(hint_lines)
-        renewals = _RENEWALS_RE.search(hint)
         checkbox = row.find("input", attrs={"type": "checkbox"})
         title, author = _split_title(full_title)
         loans.append(
@@ -259,21 +238,15 @@ def parse_loans(page: AdisPage) -> list[Loan]:
                 title=title,
                 author=author,
                 full_title=full_title,
-                signature=signature,
+                shelf_mark=shelf_mark,
                 library=_text(cells[index[COLUMN_LIBRARY]]) if COLUMN_LIBRARY in index else "",
                 due_date=parse_date(_text(cells[index[COLUMN_DUE]])),
                 hint=hint,
                 renewable=bool(hint_lines) and hint_lines[0].lower().startswith(HINT_RENEWABLE),
-                renewals=int(renewals.group(1)) if renewals else None,
                 checkbox=checkbox.get("value") if checkbox else None,
             )
         )
     return loans
-
-
-def renewed_today(loan: Loan) -> bool:
-    """True if the catalog reports the loan as renewed today."""
-    return loan.hint.startswith(HINT_RENEWED_TODAY)
 
 
 # ---- catalog search (cover lookup) ------------------------------------------------

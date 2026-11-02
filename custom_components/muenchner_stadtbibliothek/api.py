@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
-from datetime import date, datetime
 from urllib.parse import urlsplit, urlunsplit
 
 import aiohttp
@@ -22,23 +20,24 @@ from .const import (
     BUTTON_RENEW_MARKED,
     BUTTON_SEARCH,
     BUTTON_TO_OVERVIEW,
+    COVER_URL,
     DEFAULT_BASE_URL,
     LINK_ACCOUNT,
-    COVER_URL,
     LINK_LOGOUT,
     MAX_COVER_BYTES,
     MAX_LOOKUPS_PER_UPDATE,
     REQUEST_TIMEOUT,
-    SEARCH_FIELD_SIGNATURE,
+    SEARCH_FIELD_SHELF_MARK,
     SEARCH_FIELD_TITLE,
     SEARCH_OPERATOR_AND,
     START_PATH,
     USER_AGENT,
 )
+from .models import AccountData, Loan, Lookup, RenewResult
 from .parser import (
     LINK_PREFIX,
     AdisPage,
-    Loan,
+    SearchForm,
     find_link,
     is_login_page,
     loans_link,
@@ -52,7 +51,6 @@ from .parser import (
     parse_login_form,
     parse_page,
     parse_search_form,
-    renewed_today,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -77,38 +75,9 @@ class LibraryParseError(LibraryError):
 class LibraryRenewError(LibraryError):
     """Renewal not possible or not confirmed."""
 
-    def __init__(self, message: str, account: "AccountData | None" = None) -> None:
+    def __init__(self, message: str, account: AccountData | None = None) -> None:
         super().__init__(message)
         self.account = account  # loans as shown after the attempt, if the catalog answered
-
-
-@dataclass
-class AccountData:
-    """Everything one update returns."""
-
-    card_valid_until: date | None
-    loans: list[Loan] = field(default_factory=list)
-    updated: datetime = field(default_factory=datetime.now)
-    # catalog searches done in this update: barcode -> result (ISBN None when no unique record was found)
-    looked_up: dict[str, "Lookup"] = field(default_factory=dict)
-
-
-@dataclass
-class Lookup:
-    """Result of one catalog search."""
-
-    isbn: str | None
-    cover: bytes | None = None
-    content_type: str | None = None
-
-
-@dataclass
-class RenewResult:
-    """Outcome of one renewal."""
-
-    account: AccountData
-    loan: Loan | None
-    message: str | None
 
 
 def browser_url(url: str) -> str:
@@ -187,53 +156,66 @@ class LibraryClient:
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             raise LibraryConnectionError(f"cover: {type(err).__name__}: {err}".rstrip(": ")) from err
 
-    async def _load(self, method: str, url: str, data: list[tuple[str, str]] | None = None) -> tuple[AdisPage, str]:
+    async def _load(self, method: str, url: str, data: list[tuple[str, str]] | None = None) -> AdisPage:
         html, final_url = await self._request(method, url, data)
-        return parse_page(html, final_url), html
+        return parse_page(html, final_url)
 
-    def _form(self, page: AdisPage, **overrides: str) -> list[tuple[str, str]]:
-        values = dict(page.hidden)
-        values.update(scriptEnabled="true", scrollPos="0")
-        values.update(overrides)
-        return list(values.items())
-
-    async def _click_link(self, page: AdisPage, code: str) -> tuple[AdisPage, str]:
+    async def _click_link(self, page: AdisPage, code: str) -> AdisPage:
+        """Follow an aDIS link: post the page's form with the link code."""
         if not page.action:
             raise LibraryParseError("page without form")
-        data = self._form(page, keyCode="0", selected=LINK_PREFIX + code, overrideScrollPos="0")
+        values = {**page.hidden, "scriptEnabled": "true", "scrollPos": "0", "keyCode": "0", "selected": LINK_PREFIX + code, "overrideScrollPos": "0"}
+        return await self._load("POST", page.action, list(values.items()))
+
+    async def _press(
+        self,
+        page: AdisPage,
+        button: tuple[str, str, str | None],
+        fields: dict[str, str] | None = None,
+        extra: list[tuple[str, str]] | None = None,
+    ) -> AdisPage:
+        """Submit the page's form with a button, like the browser does.
+
+        button: (name, value, data-fld). fields: visible form fields to send (e.g. a search form),
+        extra: additional pairs such as checked checkboxes. The browser sends the button twice:
+        once with its value and once as "pressed".
+        """
+        if not page.action:
+            raise LibraryParseError("page without form")
+        name, label, data_fld = button
+        values = {**(fields or {}), **page.hidden}
+        values.update(scriptEnabled="true", scrollPos="0", keyCode="0", focus=data_fld or "", source="$B", selected="")
+        data = [*values.items(), (name, label), *(extra or []), (name, "pressed"), ("overrideScrollPos", "0")]
         return await self._load("POST", page.action, data)
 
-    async def _click_button(
-        self, page: AdisPage, label: str, extra: list[tuple[str, str]] | None = None
-    ) -> tuple[AdisPage, str]:
-        if not page.action or label not in page.buttons:
+    async def _click_button(self, page: AdisPage, label: str, extra: list[tuple[str, str]] | None = None) -> AdisPage:
+        """Press a button found by its label."""
+        if label not in page.buttons:
             raise LibraryParseError(f"button '{label}' not found")
         name, data_fld = page.buttons[label]
-        data = self._form(page, keyCode="0", focus=data_fld or "", source="$B", selected="")
-        data += [(name, label), *(extra or []), (name, "pressed"), ("overrideScrollPos", "0")]
-        return await self._load("POST", page.action, data)
+        return await self._press(page, (name, label, data_fld), extra=extra)
 
     # ---- session ----------------------------------------------------------
 
     async def _login(self) -> AdisPage:
         """Log in and return the account overview."""
         self._session.cookie_jar.clear()
-        start, _ = await self._load("GET", self._base_url + START_PATH)
+        start = await self._load("GET", self._base_url + START_PATH)
         code = find_link(start, LINK_ACCOUNT)
         if code is None:
             raise LibraryParseError(f"link '{LINK_ACCOUNT}' not found on the start page")
-        page, html = await self._click_link(start, code)
+        page = await self._click_link(start, code)
 
-        if is_login_page(html):
-            form = parse_login_form(html, page.url)
-            button = login_submit_button(html, BUTTON_LOGIN_NAME, BUTTON_LOGIN)
+        if is_login_page(page):
+            form = parse_login_form(page)
+            button = login_submit_button(page, BUTTON_LOGIN_NAME, BUTTON_LOGIN)
             if form is None or button is None:
                 raise LibraryParseError("login form not recognized")
-            action, fields, user_field, password_field = form
-            data = [*fields.items(), (user_field, self._card_number), (password_field, self._password), button]
-            page, html = await self._load("POST", action, data)
-            if is_login_page(html):
-                raise LibraryAuthError(login_error(html) or "login rejected")
+            action, hidden, user_field, password_field = form
+            data = [*hidden.items(), (user_field, self._card_number), (password_field, self._password), button]
+            page = await self._load("POST", action, data)
+            if is_login_page(page):
+                raise LibraryAuthError(login_error(page) or "login rejected")
 
         if parse_card_valid_until(page) is None and loans_link(page)[0] is None:
             raise LibraryParseError("account overview not recognized after login")
@@ -253,61 +235,65 @@ class LibraryClient:
         code, count = loans_link(overview)
         if code is None:
             return None
-        page, _ = await self._click_link(overview, code)
+        page = await self._click_link(overview, code)
         if count and not parse_loans(page):
             raise LibraryParseError("loans table not recognized")
         return page
 
-    # ---- public -----------------------------------------------------------
+    # ---- cover lookup -----------------------------------------------------
 
-    async def _lookup_isbns(self, page: AdisPage, loans: list[Loan]) -> tuple[AdisPage, dict[str, Lookup]]:
+    async def _lookup_covers(self, page: AdisPage, loans: list[Loan]) -> tuple[AdisPage, dict[str, Lookup]]:
         """Search the catalog once per item like a user would (title + shelf mark + library).
 
-        Only a unique hit opens the full record directly; its ISBN and its cover image (loaded
-        like the browser does for that page) are taken. Anything else (no hit, a result list,
-        a changed page) gives no ISBN. Errors stop the lookups but never the update. Returns
-        the last page (for the logout) and the results.
+        Only a unique hit opens the full record directly; its ISBN and its cover image are taken.
+        Anything else (no hit, a result list) gives no ISBN. Errors stop the lookups but never the
+        update. Returns the last page (for the logout) and the results.
         """
         results: dict[str, Lookup] = {}
         try:
             if BUTTON_ADVANCED_SEARCH not in page.buttons and BUTTON_TO_OVERVIEW in page.buttons:
-                page, _ = await self._click_button(page, BUTTON_TO_OVERVIEW)
-            fields = (SEARCH_FIELD_TITLE, SEARCH_FIELD_SIGNATURE)
+                page = await self._click_button(page, BUTTON_TO_OVERVIEW)  # the loans page has no search
             for loan in loans[:MAX_LOOKUPS_PER_UPDATE]:
-                # a search without a hit stays on the search form (which has no "Erweiterte Suche" button): reuse it
-                form = parse_search_form(page, fields, SEARCH_OPERATOR_AND, BUTTON_SEARCH)
+                page, form = await self._open_search_form(page)
                 if form is None:
-                    if BUTTON_ADVANCED_SEARCH not in page.buttons:
-                        break
-                    page, _ = await self._click_button(page, BUTTON_ADVANCED_SEARCH)
-                    form = parse_search_form(page, fields, SEARCH_OPERATOR_AND, BUTTON_SEARCH)
-                if form is None or not page.action:
                     _LOGGER.debug("Advanced search form not recognized")
                     break
-                values = dict(form.fields)
-                for name, _value in form.texts:
-                    values[name] = ""  # the catalog keeps the terms of the previous search in the form
-                values.update(page.hidden)
-                values.update(scriptEnabled="true", scrollPos="0", keyCode="0", source="$B", selected="", focus=form.submit[2] or "")
-                values[form.library] = loan.library
-                (field1, input1), (field2, input2) = form.rows[0], form.rows[1]
-                values.update({field1: SEARCH_FIELD_TITLE, input1: loan.title, form.operators[0]: SEARCH_OPERATOR_AND})
-                if loan.signature:
-                    values.update({field2: SEARCH_FIELD_SIGNATURE, input2: loan.signature})
-                name, label, _ = form.submit
-                data = [*values.items(), (name, label), (name, "pressed")]
-                page, _ = await self._load("POST", page.action, data)
-                isbn = parse_isbn(page)
-                result = Lookup(isbn)
-                if isbn:
-                    image = await self._fetch_image(parse_cover_src(page) or COVER_URL.format(isbn=isbn), page.url)
-                    if image:
-                        result.cover, result.content_type = image
-                results[loan.barcode] = result
-                _LOGGER.debug("Cover lookup for %s: %s, cover %s", loan.barcode, isbn or "no unique record", bool(result.cover))
+                page = await self._search(page, form, loan)
+                result = results[loan.barcode] = await self._read_record(page)
+                _LOGGER.debug("Cover lookup for %s: %s, cover %s", loan.barcode, result.isbn or "no unique record", bool(result.cover))
         except LibraryError as err:
             _LOGGER.debug("Cover lookup stopped: %s", err)
         return page, results
+
+    async def _open_search_form(self, page: AdisPage) -> tuple[AdisPage, SearchForm | None]:
+        """The advanced search form: the current page after a search without hit, otherwise via its button."""
+        fields = (SEARCH_FIELD_TITLE, SEARCH_FIELD_SHELF_MARK)
+        form = parse_search_form(page, fields, SEARCH_OPERATOR_AND, BUTTON_SEARCH)
+        if form is None and BUTTON_ADVANCED_SEARCH in page.buttons:
+            page = await self._click_button(page, BUTTON_ADVANCED_SEARCH)
+            form = parse_search_form(page, fields, SEARCH_OPERATOR_AND, BUTTON_SEARCH)
+        return page, form
+
+    async def _search(self, page: AdisPage, form: SearchForm, loan: Loan) -> AdisPage:
+        """Fill in library, title and shelf mark and press the form's own search button."""
+        values = dict(form.fields)
+        values.update({name: "" for name, _ in form.texts})  # the catalog keeps the terms of the previous search
+        values[form.library] = loan.library
+        (title_select, title_input), (shelf_select, shelf_input) = form.rows[0], form.rows[1]
+        values.update({title_select: SEARCH_FIELD_TITLE, title_input: loan.title, form.operators[0]: SEARCH_OPERATOR_AND})
+        if loan.shelf_mark:
+            values.update({shelf_select: SEARCH_FIELD_SHELF_MARK, shelf_input: loan.shelf_mark})
+        return await self._press(page, form.submit, values)
+
+    async def _read_record(self, page: AdisPage) -> Lookup:
+        """ISBN and cover of a full record page; a result list or the search form give no ISBN."""
+        isbn = parse_isbn(page)
+        if not isbn:
+            return Lookup(None)
+        image = await self._fetch_image(parse_cover_src(page) or COVER_URL.format(isbn=isbn), page.url)
+        return Lookup(isbn, *image) if image else Lookup(isbn)
+
+    # ---- public -----------------------------------------------------------
 
     async def async_fetch(self, known: set[str] | None = None) -> AccountData:
         """Card validity and current loans.
@@ -328,7 +314,7 @@ class LibraryClient:
                 if known is not None:
                     new = [loan for loan in loans if loan.barcode not in known]
                     if new:
-                        last, looked_up = await self._lookup_isbns(last, new)
+                        last, looked_up = await self._lookup_covers(last, new)
                 return AccountData(valid, loans, looked_up=looked_up)
             finally:
                 await self._logout(last)
@@ -353,7 +339,7 @@ class LibraryClient:
                 if not before.checkbox:
                     raise LibraryParseError("checkbox of the loan not found")
 
-                result_page, _ = await self._click_button(
+                result_page = await self._click_button(
                     loans_page, BUTTON_RENEW_MARKED, [("$RTable_checkbox[]", before.checkbox)]
                 )
                 last = result_page
@@ -363,7 +349,7 @@ class LibraryClient:
                 after = next((loan for loan in after_loans if loan.barcode == barcode), None)
                 account = AccountData(valid, after_loans)
                 renewed = after is not None and (
-                    renewed_today(after)
+                    after.renewed_today
                     or (after.due_date and before.due_date and after.due_date > before.due_date)
                 )
                 if not renewed:

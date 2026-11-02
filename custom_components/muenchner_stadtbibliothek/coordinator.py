@@ -12,13 +12,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import (
-    AccountData,
-    LibraryAuthError,
-    LibraryClient,
-    LibraryError,
-    LibraryRenewError,
-)
+from .api import LibraryAuthError, LibraryClient, LibraryError, LibraryRenewError
 from .const import (
     COVER_DIR,
     COVER_URL_PATH,
@@ -27,10 +21,11 @@ from .const import (
     DEFAULT_LOOKUP_COVERS,
     DEFAULT_SCAN_INTERVAL_HOURS,
     DOMAIN,
+    LOOKUP_STORE_KEY,
 )
+from .models import AccountData
 
 STORAGE_VERSION = 1
-LOOKUP_VERSION = 2  # results of older versions without a cover are searched once more
 IMAGE_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}
 
 _LOGGER = logging.getLogger(__name__)
@@ -55,26 +50,22 @@ class LibraryCoordinator(DataUpdateCoordinator[AccountData]):
         self.client = client
         self._renewing: set[str] = set()  # barcodes with a renewal in progress
         self._lookup_covers = entry.options.get(CONF_LOOKUP_COVERS, DEFAULT_LOOKUP_COVERS)
-        # barcode -> {"isbn": str | None, "file": cover file name | None}; kept for good (also for returned
-        # items, so a book borrowed again needs no new search); every item is searched once
-        self._isbn_store: Store[dict[str, dict]] = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.isbn")
-        self._isbns: dict[str, dict] = {}
+        # cover lookups: barcode -> {"isbn": str | None, "file": cover file name | None}. Kept for good
+        # (also for returned items, so a book borrowed again needs no new search); every item is searched once.
+        self._lookup_store: Store[dict[str, dict]] = Store(
+            hass, STORAGE_VERSION, LOOKUP_STORE_KEY.format(entry_id=entry.entry_id)
+        )
+        self._lookups: dict[str, dict] = {}
         self._cover_dir = Path(hass.config.path(".storage", COVER_DIR))
 
-    async def async_load_isbns(self) -> None:
-        """Load the stored lookup results (before the first update)."""
-        stored = await self._isbn_store.async_load() or {}
-        # results without a cover from older versions (0.5.0 kept only the ISBN, 0.5.0/0.5.1 stopped
-        # after a search without hit) are dropped, so these items are searched once more
-        self._isbns = {
-            code: value
-            for code, value in stored.items()
-            if isinstance(value, dict) and (value.get("file") or value.get("v") == LOOKUP_VERSION)
-        }
+    async def async_load_lookups(self) -> None:
+        """Load the stored cover lookups (before the first update)."""
+        stored = await self._lookup_store.async_load() or {}
+        self._lookups = {code: value for code, value in stored.items() if isinstance(value, dict)}
 
     async def _async_update_data(self) -> AccountData:
         try:
-            account = await self.client.async_fetch(set(self._isbns) if self._lookup_covers else None)
+            account = await self.client.async_fetch(set(self._lookups) if self._lookup_covers else None)
         except LibraryAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except LibraryError as err:
@@ -82,9 +73,9 @@ class LibraryCoordinator(DataUpdateCoordinator[AccountData]):
         if account.looked_up:
             for code, result in account.looked_up.items():
                 file = await self._save_cover(result.isbn, result.cover, result.content_type)
-                self._isbns[code] = {"isbn": result.isbn, "file": file, "v": LOOKUP_VERSION}
-            self._isbn_store.async_delay_save(lambda: self._isbns, 5)
-        self._apply_isbns(account)
+                self._lookups[code] = {"isbn": result.isbn, "file": file}
+            self._lookup_store.async_delay_save(lambda: self._lookups, 5)
+        self._apply_lookups(account)
         return account
 
     async def _save_cover(self, isbn: str | None, image: bytes | None, content_type: str | None) -> str | None:
@@ -101,11 +92,12 @@ class LibraryCoordinator(DataUpdateCoordinator[AccountData]):
         await self.hass.async_add_executor_job(_write)
         return name
 
-    def _apply_isbns(self, account: AccountData) -> None:
+    def _apply_lookups(self, account: AccountData) -> None:
+        """Add ISBN and local cover URL of the stored lookups to the loans."""
         if not self._lookup_covers:
             return
         for loan in account.loans:
-            known = self._isbns.get(loan.barcode) or {}
+            known = self._lookups.get(loan.barcode) or {}
             loan.isbn = loan.isbn or known.get("isbn")
             loan.cover_url = COVER_URL_PATH.format(file=known["file"]) if known.get("file") else None
 
@@ -131,7 +123,7 @@ class LibraryCoordinator(DataUpdateCoordinator[AccountData]):
         except LibraryRenewError as err:
             if err.account is not None:
                 self._keep_card_validity(err.account)
-                self._apply_isbns(err.account)
+                self._apply_lookups(err.account)
                 self.async_set_updated_data(err.account)
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
@@ -145,7 +137,7 @@ class LibraryCoordinator(DataUpdateCoordinator[AccountData]):
                 translation_placeholders={"reason": str(err)},
             ) from err
         self._keep_card_validity(result.account)
-        self._apply_isbns(result.account)
+        self._apply_lookups(result.account)
         self.async_set_updated_data(result.account)
 
     def _keep_card_validity(self, account: AccountData) -> None:

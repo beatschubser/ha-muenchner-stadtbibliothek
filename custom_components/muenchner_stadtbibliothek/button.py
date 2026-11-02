@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .const import DOMAIN
 from .coordinator import LibraryConfigEntry, LibraryCoordinator
 from .entity import LibraryEntity
-from .parser import Loan
+from .models import Loan
 
 KEY_PREFIX = "renew_"
 BUTTON_ATTRIBUTES = ("barcode", "title", "due_date", "renewable", "renewed_today")
