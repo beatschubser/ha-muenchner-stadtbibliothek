@@ -139,6 +139,13 @@ async def test_returned_loan_removes_button(hass: HomeAssistant, fake) -> None:
     assert set(buttons) == {"00000100000002", "00000100000003"}
 
 
+async def test_unload_closes_the_http_session(hass: HomeAssistant, fake) -> None:
+    entry = await _setup(hass)
+    client = entry.runtime_data.client
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    assert client._session.closed
+
+
 async def test_card_is_served(hass: HomeAssistant, hass_client, fake) -> None:
     entry = await _setup(hass)
     assert entry.runtime_data.data.loans[0].cover_url

@@ -42,8 +42,9 @@ async def _validate(hass, card_number: str, password: str) -> tuple[str | None, 
     """Try one login; returns an error key (or None) and details for the message."""
     from . import create_client  # avoids a circular import
 
+    client = create_client(hass, card_number, password)
     try:
-        await create_client(hass, card_number, password).async_fetch()
+        await client.async_fetch()
     except LibraryAuthError:
         return "invalid_auth", ""
     except LibraryConnectionError as err:
@@ -52,6 +53,8 @@ async def _validate(hass, card_number: str, password: str) -> tuple[str | None, 
     except LibraryError as err:
         _LOGGER.exception("Unexpected catalog page")
         return "unknown_page", str(err)
+    finally:
+        await client.async_close()
     return None, ""
 
 

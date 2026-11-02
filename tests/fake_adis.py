@@ -292,6 +292,10 @@ class FakeSession:
     def __init__(self, fake: FakeAdis, base: str = "https://catalog.test") -> None:
         self.fake, self.base = fake, base
         self.cookie_jar = _CookieJar()
+        self.closed = False
+
+    async def close(self) -> None:
+        self.closed = True
 
     def request(self, method, url, data=None, headers=None, **_kwargs) -> _Response:
         if url.startswith("/"):

@@ -190,6 +190,13 @@ def test_isbn_from_isbn10():
     assert parser.parse_isbn(page) == "9783440159507"
 
 
+def test_close_session():
+    session = FakeSession(FakeAdis())
+    client = api.LibraryClient(session, CARD, PASSWORD, "https://catalog.test")
+    asyncio.run(client.async_close())
+    assert session.closed
+
+
 def test_fetch_without_loans():
     data = run(FakeAdis(loans=[]), lambda c: c.async_fetch())
     assert data.loans == []

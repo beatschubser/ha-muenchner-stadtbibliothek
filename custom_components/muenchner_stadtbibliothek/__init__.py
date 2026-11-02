@@ -26,7 +26,10 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 def create_client(hass: HomeAssistant, card_number: str, password: str) -> LibraryClient:
-    """Client with its own cookie jar (the catalog session must not mix with others)."""
+    """Client with its own HTTP session and cookie jar (the catalog session must not mix with others).
+
+    The caller closes it with client.async_close() when it is no longer needed.
+    """
     session = async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar())
     return LibraryClient(session, card_number, password)
 
@@ -56,8 +59,11 @@ async def _async_options_updated(hass: HomeAssistant, entry: LibraryConfigEntry)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: LibraryConfigEntry) -> bool:
-    """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    """Unload a config entry and close its HTTP session."""
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        await entry.runtime_data.client.async_close()
+    return unloaded
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:

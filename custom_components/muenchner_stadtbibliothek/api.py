@@ -105,6 +105,10 @@ class LibraryClient:
         self._base_url = base_url.rstrip("/")
         self._lock = asyncio.Lock()
 
+    async def async_close(self) -> None:
+        """Close the HTTP session of this client (after unload or a login check)."""
+        await self._session.close()
+
     # ---- HTTP -------------------------------------------------------------
 
     async def _request(self, method: str, url: str, data: list[tuple[str, str]] | None = None) -> tuple[str, str]:
