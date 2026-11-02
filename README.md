@@ -20,6 +20,8 @@
 > [!NOTE]
 > Der Code ist zu 100 % KI-generiert.
 
+<p align="center"><img src="assets/tablet-card.png" width="520" alt="Dashboard-Karte mit Ausleihen auf einem Tablet"></p>
+
 ## Funktionen
 
 - **Ausweis gültig bis** als Datumssensor.

@@ -24,6 +24,8 @@ tests/test_client.py    python3 tests/test_client.py (needs only beautifulsoup4;
 tests/test_integration.py real HA via pytest-homeassistant-custom-component (GitHub Actions only, no PyPI here)
 scripts/bump_version.py   sets the version in manifest.json, const.py and the card
 scripts/release_notes.py  release notes from commit subjects
+assets/                   README image (tablet mockup), raw/ screenshot, mockups/mockups.html
+scripts/render_mockups.py renders assets/*.png from assets/raw/ via assets/mockups/mockups.html (Playwright)
 ```
 
 ## How the catalog works (aDIS/BMS by aStec, ssl.muenchen.de)
@@ -53,6 +55,7 @@ scripts/release_notes.py  release notes from commit subjects
 - Buttons of loans that are not renewable stay available and raise an error with the hint, without a request to the catalog.
 - Attribute names are English; page texts in const.py are German because the catalog is German only.
 - Attribute structure (wish of the maintainer: logical, everything else follows it): the loans sensor holds all data (`loans` list with every field, `renewable_count`, `fetched_at`); next due date: `count`, `titles` (`count` also tells automations this sensor apart from the card validity); renew buttons only `barcode`, `title`, `due_date`, `renewable`, `renewed_today` (button.BUTTON_ATTRIBUTES). No copies of other sensors' states as attributes; automations find the card validity sensor via `device_entities` (date sensor without `count`).
+- README image: real screenshot of the maintainer (his decision) with all covers pixelated (publisher artwork, risk of a cease-and-desist letter); every new README screenshot gets pixelated covers too.
 - README and repository description are German (integration for Munich only); code comments, commit subjects and release notes stay English.
 
 ## Card (design approved by the maintainer: "D2" cover + ring, mockups on the design canvas)
