@@ -13,3 +13,9 @@ Thumbs.db
 
 # Local test artifacts
 *.zip
+
+# Local only: notes and README image sources
+CLAUDE.md
+assets/raw/
+assets/mockups/
+scripts/render_mockups.py
