@@ -67,12 +67,12 @@ Jede Ausleihe zeigt das Cover, die Resttage als Ring (orange ab 3 Tagen, rot wen
 
 ## Entitäten
 
-| Entität (deutscher / englischer Name) | Zustand | Attribute |
+| Entität | Zustand | Attribute |
 | --- | --- | --- |
-| Ausweis gültig bis / Card valid until | Datum | |
-| Ausleihen / Loans | Anzahl der Ausleihen | `loans` (alle Ausleihen mit allen Angaben, siehe unten), `renewable_count`, `fetched_at` (letzter Abruf aus dem Katalog) |
-| Nächste Fälligkeit / Next due date | Datum | `count`, `titles` |
-| *Titel* verlängern / Renew *title* (Button, einer pro Ausleihe) | | `barcode`, `title`, `due_date`, `renewable`, `renewed_today` |
+| Ausweis gültig bis | Datum | |
+| Ausleihen | Anzahl der Ausleihen | `loans` (alle Ausleihen mit allen Angaben, siehe unten), `renewable_count`, `fetched_at` (letzter Abruf aus dem Katalog) |
+| Nächste Fälligkeit | Datum | `count`, `titles` |
+| *Titel* verlängern (Button, einer pro Ausleihe) | | `barcode`, `title`, `due_date`, `renewable`, `renewed_today` |
 
 Felder eines Eintrags in `loans`:
 
