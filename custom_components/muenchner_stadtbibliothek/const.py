@@ -15,6 +15,8 @@ CONF_SCAN_INTERVAL_HOURS = "scan_interval_hours"
 DEFAULT_SCAN_INTERVAL_HOURS = 4
 MIN_SCAN_INTERVAL_HOURS = 1
 MAX_SCAN_INTERVAL_HOURS = 48
+# the catalog is sometimes down at night: after a failed update the last data is kept this long
+KEEP_DATA_HOURS = 24
 
 # Texts of the catalog pages the client looks for (German catalog only).
 LINK_ACCOUNT = "Mein Konto"

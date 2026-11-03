@@ -60,6 +60,7 @@ class FakeAdis:
     cover_requests: list[tuple[str, str]] = field(default_factory=list)  # (path, referer)
     last_terms: tuple[str, str] = ("", "")
     cover_failures: int = 0  # number of cover requests answered with a server error (temporary problem)
+    maintenance: bool = False  # start page without links, like the catalog at night
     hits: list[str] = field(default_factory=list)
 
     # ---- rendering ----------------------------------------------------------
@@ -174,6 +175,8 @@ class FakeAdis:
         if method == "GET" and path == "/aDISWeb/app":
             self.requests.append("GET start")
             self.logged_in, self.view = False, "catalog"
+            if self.maintenance:
+                return 200, "<html><body><p>Wartungsarbeiten</p></body></html>"
             return 302, "/aDISWeb/app/opac"
         if method == "GET" and (path == "/aDISWeb/app/opac" or path.startswith(f"/aDISWeb/{SESSION}/app/opac/")):
             self.requests.append(f"GET {path}")

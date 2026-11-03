@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
@@ -21,6 +21,7 @@ from .const import (
     DEFAULT_LOOKUP_COVERS,
     DEFAULT_SCAN_INTERVAL_HOURS,
     DOMAIN,
+    KEEP_DATA_HOURS,
     LOOKUP_STORE_KEY,
 )
 from .models import AccountData
@@ -69,6 +70,11 @@ class LibraryCoordinator(DataUpdateCoordinator[AccountData]):
         except LibraryAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except LibraryError as err:
+            # catalog down or a maintenance page: keep the last data for a while, the next try
+            # comes at the normal interval (no extra requests)
+            if self.data is not None and datetime.now() - self.data.fetched_at < timedelta(hours=KEEP_DATA_HOURS):
+                _LOGGER.warning("Catalog not available, keeping the data of %s: %s", self.data.fetched_at.strftime("%d.%m. %H:%M"), err)
+                return self.data
             raise UpdateFailed(str(err)) from err
         if account.looked_up:
             for code, result in account.looked_up.items():

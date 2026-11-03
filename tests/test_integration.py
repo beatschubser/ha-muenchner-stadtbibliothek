@@ -4,6 +4,7 @@ Needs pytest-homeassistant-custom-component (runs in GitHub Actions).
 """
 
 import sys
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -137,6 +138,21 @@ async def test_returned_loan_removes_button(hass: HomeAssistant, fake) -> None:
     await hass.async_block_till_done()
     buttons = _button_ids(hass, entry)
     assert set(buttons) == {"00000100000002", "00000100000003"}
+
+
+async def test_catalog_maintenance_keeps_the_last_data(hass: HomeAssistant, fake) -> None:
+    entry = await _setup(hass)
+    coordinator = entry.runtime_data
+    fake.maintenance = True
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.last_update_success
+    assert len(coordinator.data.loans) == 3
+
+    # after KEEP_DATA_HOURS without a successful update the entities become unavailable
+    coordinator.data.fetched_at -= timedelta(hours=25)
+    await coordinator.async_refresh()
+    assert not coordinator.last_update_success
 
 
 async def test_unload_closes_the_http_session(hass: HomeAssistant, fake) -> None:
