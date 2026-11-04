@@ -425,10 +425,14 @@ class MuenchnerStadtbibliothekCard extends HTMLElement {
     </div>`;
   }
 
-  /** Cover stored by the integration (scaled into a fixed frame, top aligned) or a colored placeholder with the title. */
+  /**
+   * Cover stored by the integration (scaled into a fixed frame, top aligned) or a colored placeholder with the title.
+   * Loaded right away (not lazy) and decoded off the main thread: in a pop-up, lazy images would only start
+   * loading during its opening animation and make it stutter.
+   */
   _cover(loan) {
     if (loan.cover_url && !this._brokenCovers.has(loan.cover_url)) {
-      return `<div class="cover"><img src="${esc(loan.cover_url)}" alt="" loading="lazy" data-cover="${esc(loan.cover_url)}"></div>`;
+      return `<div class="cover"><img src="${esc(loan.cover_url)}" alt="" decoding="async" data-cover="${esc(loan.cover_url)}"></div>`;
     }
     const color = PLACEHOLDER_COLORS[hashCode(loan.barcode || loan.title) % PLACEHOLDER_COLORS.length];
     return `<div class="cover"><div class="placeholder" style="--lib-cover:${color}" aria-hidden="true"><span>${esc(loan.title)}</span></div></div>`;
